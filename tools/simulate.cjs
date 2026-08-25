@@ -33,6 +33,7 @@ const text_style = { NONE: 0, WRAP: 1, ELLIPSIS: 2, CHAR_WRAP: 3 }
 const prop = { MORE: 'MORE', X: 'X', Y: 'Y', VISIBLE: 'VISIBLE' }
 const widget = {
   IMG: 'IMG',
+  IMG_CLICK: 'IMG_CLICK',
   TEXT: 'TEXT',
   FILL_RECT: 'FILL_RECT',
   TEXT_IMG: 'TEXT_IMG',
@@ -100,9 +101,28 @@ class Calorie { getCurrent() { return READING.calorie } getTarget() { return 500
 class Stress { getCurrent() { return { value: READING.stress, time: 0 } } onChange() {} offChange() {} }
 class Pai { getToday() { return READING.paiToday } getTotal() { return 120 } }
 
+const launched = []
+const SYSTEM_APPS = {
+  SYSTEM_APP_HR: 10001,
+  SYSTEM_APP_STATUS: 10002,
+  SYSTEM_APP_CALENDAR: 10003,
+  SYSTEM_APP_SETTING: 10004,
+  SYSTEM_APP_WEATHER: 10005,
+  SYSTEM_APP_PRESSURE: 10006,
+  SYSTEM_APP_PAI: 10007,
+}
+const APP_NAME = {}
+Object.keys(SYSTEM_APPS).forEach((k) => {
+  APP_NAME[SYSTEM_APPS[k]] = k
+})
+
 const MODULES = {
   '@zos/ui': { createWidget, widget, prop, align, text_style, data_type },
   '@zos/sensor': { Time, Battery, Step, HeartRate, Distance, Stand, Calorie, Stress, Pai },
+  '@zos/router': Object.assign(
+    { launchApp: (opt) => launched.push(opt) },
+    SYSTEM_APPS
+  ),
 }
 
 // ------------------------------------------------------------ ESM shim -----
@@ -252,6 +272,7 @@ function renderScene(level) {
     } else if (w.type === widget.TEXT_IMG) {
       body += renderTextImg(p)
     }
+    // IMG_CLICK zones are fully transparent; nothing to draw.
   }
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ` +
@@ -280,12 +301,31 @@ function write(level, file) {
 
 // ------------------------------------------------------------------ main ---
 
+// Exercise every tap zone and report which system app it would open.
+const zones = created.filter((w) => w.type === widget.IMG_CLICK)
+for (const z of zones) {
+  if (typeof z.props.click_func === 'function') z.props.click_func()
+  else if (typeof z.props.click_up === 'function') z.props.click_up()
+  else problems.push(`tap zone at ${z.props.x},${z.props.y} has no handler`)
+}
+if (zones.length && launched.length !== zones.length) {
+  problems.push(`${zones.length} tap zones but ${launched.length} launched`)
+}
+
 console.log(`widgets created: ${created.length}`)
 const byType = {}
 created.forEach((w) => {
   byType[w.type] = (byType[w.type] || 0) + 1
 })
 console.log('  ' + Object.entries(byType).map(([k, v]) => `${k}=${v}`).join('  '))
+
+if (zones.length) {
+  console.log(`tap zones: ${zones.length}`)
+  launched.forEach((opt, i) => {
+    const z = zones[i].props
+    console.log(`  ${String(z.x).padStart(3)},${String(z.y).padStart(3)} ${z.w}x${z.h}  ->  ${APP_NAME[opt.appId] || opt.appId}`)
+  })
+}
 
 if (problems.length) {
   console.log('\nPROBLEMS:')

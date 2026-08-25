@@ -3,10 +3,16 @@
 Watchface para Amazfit Bip 6 (390 × 450), nas três variantes oficiais do
 aparelho: `9765120`, `9765121` e `10158337`.
 
-O mostrador é lido como duas órbitas: o anel externo carrega as 24 horas, o anel
-interno os 60 minutos, e um marcador iluminado indica a posição atual em cada um.
-À esquerda ficam frequência cardíaca, distância, passos, data e horas em pé;
-embaixo, uma cápsula com temperatura, calorias, estresse e PAI.
+O mostrador fica ancorado no canto superior direito e é lido como duas órbitas:
+o anel externo carrega as 24 horas, o anel interno as marcas de 5 minutos, e um
+marcador iluminado indica a posição atual em cada um. Os dois marcadores crescem
+*para dentro*, em direção ao centro vazio, então ficam grandes sem empurrar o
+mostrador para fora da tela.
+
+Os indicadores são blocos: frequência cardíaca, distância e passos à esquerda;
+data, horas em pé e bateria na faixa do meio; temperatura, calorias, estresse e
+PAI na cápsula inferior. Cada bloco é tocável e abre o aplicativo de sistema
+correspondente.
 
 ## Comandos
 
@@ -45,11 +51,11 @@ tocando sete vezes no ícone do Zepp.
 
 | Caminho | Papel |
 | --- | --- |
-| `watchface/index.js` | A watchface. Usa a API atual do Zepp OS (`@zos/ui`, `@zos/sensor`). |
+| `watchface/index.js` | A watchface. Usa a API atual do Zepp OS (`@zos/ui`, `@zos/sensor`, `@zos/router`). |
 | `watchface/layout.js` | **Gerado.** Coordenadas, cores e nomes de arquivo usados em tempo de execução. |
-| `tools/design.cjs` | Fonte única de verdade: paleta, geometria dos anéis, ícones. |
+| `tools/design.cjs` | Fonte única de verdade: paleta, geometria dos anéis, tabela de blocos, ícones. |
 | `tools/build-assets.cjs` | Desenha os SVGs, rasteriza para PNG e emite `layout.js`. |
-| `tools/simulate.cjs` | Executa a watchface fora do relógio e rasteriza o resultado. |
+| `tools/simulate.cjs` | Executa a watchface fora do relógio, confere as zonas de toque e rasteriza o resultado. |
 | `tools/zoom.cjs` | Recorta e amplia um PNG para conferir detalhes. |
 | `assets/default/` | **Gerado.** Não editar à mão — `npm run assets` sobrescreve tudo. |
 
@@ -58,10 +64,11 @@ que o empacotador do Zeus não tente compilá-los junto com a watchface.
 
 ## Como o desenho é montado
 
-Tudo que é estático — anéis, números das horas e dos minutos, ícones, divisórias,
+Tudo que é estático — anéis, números das horas e dos minutos, ícones, os blocos,
 a cápsula inferior — é assado em `bg.png` pelo gerador. Em tempo de execução
-sobram 23 widgets: uma imagem de fundo, os dois marcadores orbitais, a barra de
-frequência cardíaca, a onda da bateria e os textos dos valores.
+sobram 33 widgets: uma imagem de fundo, os dois marcadores orbitais, a barra de
+frequência cardíaca, a onda da bateria, os textos dos valores e as 10 zonas de
+toque.
 
 Como `layout.js` é gerado pelo mesmo script que desenha o fundo, mudar um número
 em `tools/design.cjs` reposiciona a arte e os widgets ao mesmo tempo. Não existe
@@ -73,9 +80,14 @@ a cada minuto o código só troca `src` e a posição de duas imagens.
 ### Ajustes comuns
 
 - **Cores:** `C` em `tools/design.cjs`.
-- **Proporção dos anéis:** `DIAL` em `tools/design.cjs`. A relação
-  `rHour - rMin === hlHourR + hlMinR` garante que os dois marcadores nunca se
-  sobreponham, nem às 00:00, quando apontam para o mesmo lado.
+- **Proporção dos anéis:** `DIAL` em `tools/design.cjs`. Como os marcadores
+  crescem para dentro, a folga entre eles é
+  `rHour + hourOverhang - 2*hlHourR - (rMin + minOverhang)`; mantenha esse valor
+  em zero ou mais e eles nunca se sobrepõem, nem às 00:00, quando apontam para o
+  mesmo lado.
+- **Blocos e zonas de toque:** a tabela `SLOTS` em `tools/design.cjs`. Cada
+  entrada define a caixa do bloco, o ícone, o tamanho do valor e o campo `app`,
+  que é o aplicativo de sistema que um toque abre.
 - **Dias da semana em português:** array `WEEKDAYS` em `watchface/index.js`.
 
 Depois de qualquer ajuste, rode `npm run assets`.
@@ -98,11 +110,32 @@ Para testar valores extremos:
 $env:SIM='{"steps":98765,"heartRate":0,"battery":3}'; node tools/simulate.cjs 9 7
 ```
 
+## Toque
+
+Cada bloco tem uma zona invisível por cima (`IMG_CLICK` com um PNG transparente
+do tamanho exato do bloco) que chama `launchApp` do `@zos/router`:
+
+| Bloco | Abre |
+| --- | --- |
+| Freq. cardíaca | `SYSTEM_APP_HR` |
+| Distância, Passos, Stand, Kcal | `SYSTEM_APP_STATUS` |
+| Data | `SYSTEM_APP_CALENDAR` |
+| Bateria | `SYSTEM_APP_SETTING` |
+| Temp | `SYSTEM_APP_WEATHER` |
+| Stress | `SYSTEM_APP_PRESSURE` |
+| PAI | `SYSTEM_APP_PAI` |
+
+Não existe `SYSTEM_APP_BATTERY`; as configurações são o mais próximo disso.
+`node tools/simulate.cjs` dispara todas as zonas e lista qual aplicativo cada
+uma abriria.
+
 ## Always-On Display
 
-O estado AOD mostra apenas o mostrador orbital em cinza, centralizado na tela,
-com a hora digital no meio. Os widgets são marcados com `show_level`, então os
-dois estados convivem no mesmo arquivo.
+O estado AOD mostra apenas o mostrador orbital em cinza, centralizado e maior —
+sem os blocos há espaço para isso, e o anel interno mais largo deixa o meio livre
+para a hora digital. Ali os marcadores ficam *em cima* dos anéis, em vez de
+crescerem para dentro. Os widgets são marcados com `show_level`, então os dois
+estados convivem no mesmo arquivo.
 
 ## Temperatura
 

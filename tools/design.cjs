@@ -13,11 +13,10 @@ const W = 390
 const H = 450
 
 // ---------------------------------------------------------------- palette --
-// Values sampled from reference/target-mockup.png (see tools/sample-colors.js).
+// Values sampled from reference/target-mockup.png (see tools/sample-colors.cjs).
 const C = {
   bg: '#000000',
   pink: '#f24bcf',
-  pinkDim: '#8a2c76',
   magenta: '#ee4cc4',
   cyan: '#0be0f2',
   cyanDim: '#0d4c56',
@@ -26,109 +25,147 @@ const C = {
   violet: '#8483f5',
   white: '#ffffff',
   label: '#efecf7',
-  divider: '#241f3a',
-  chip: '#0b0a16',
+  chip: '#0d0c1c',
+  tileBg: '#0a0a2c',
+  tileEdge: '#1c1c58',
   pillBg: '#0c0c3f',
-  pillEdge: '#1d1e6b',
+  pillEdge: '#22236f',
   pillDiv: '#383993',
-  barTrack: '#18165f',
+  barTrack: '#1b1966',
   aodDim: '#5a5a6e',
   aodFaint: '#33333f',
   aodText: '#c8c8d8',
 }
 
 // ------------------------------------------------------------------ dial ---
+//
+// Anchored to the top-right corner. Both highlight chips grow *inwards* from
+// their ring towards the empty centre, so they read large without pushing the
+// dial off-screen. The invariant below keeps them from ever touching:
+//
+//   hour chip spans   [rHour + hourOverhang - 2*hlHourR, rHour + hourOverhang]
+//   minute chip spans [rMin + minOverhang - 2*hlMinR,    rMin  + minOverhang]
+//
+// so the hour chip's inner edge must clear the minute chip's outer edge.
 const DIAL = {
-  cx: 256,
-  cy: 186,
-  rHour: 102, // radius of the 24 hour markers
-  rMin: 68, // radius of the 60 minute markers
+  cx: 258,
+  cy: 148,
+  rHour: 107, // radius of the 24 hour markers
+  rMin: 58, // radius of the 12 minute markers
   hourChipR: 13.5, // faint disc behind each hour number
-  hourFont: 14,
-  minFont: 11,
-  minDotR: 2.4,
-  // rHour - rMin === hlHourR + hlMinR, so the two highlight chips meet without
-  // ever overlapping — including at 00:00, when they point the same way.
-  hlHourR: 20, // highlight ring radius, hours
-  hlMinR: 14, // highlight ring radius, minutes
-  hlHourBox: 48, // highlight sprite size (ring + glow)
-  hlMinBox: 36,
-  hlHourFont: 23,
-  hlMinFont: 16,
+  minChipR: 11.5,
+  hourFont: 16,
+  minFont: 13,
+
+  hourOverhang: 16, // how far past the hour ring the chip reaches
+  minOverhang: 13,
+  hlHourR: 25,
+  hlMinR: 23,
+  hlHourBox: 56, // sprite size (chip + glow)
+  hlMinBox: 52,
+  hlHourFont: 29,
+  hlMinFont: 27,
 }
 
-// ---------------------------------------------------------- left column ----
-const COL = {
-  x: 13,
-  w: 118,
-  rowH: 52,
-  row0Y: 34,
-  iconSize: 19,
-  labelX: 38,
+DIAL.hlHourCentre = DIAL.rHour + DIAL.hourOverhang - DIAL.hlHourR
+DIAL.hlMinCentre = DIAL.rMin + DIAL.minOverhang - DIAL.hlMinR
+
+// ---------------------------------------------------------------- tiles ----
+const TILE = {
+  r: 18,
+  pad: 12,
+  iconSize: 20,
+  labelDx: 38,
   labelSize: 15,
-  valueSize: 27,
-  unitSize: 15,
+  labelDy: 20, // centre line of the icon + label row
+  valueDy: 24, // distance from the tile's bottom edge to the value centre
 }
 
-const ROWS = [
-  { key: 'hr', icon: 'heart', color: C.pink, label: null },
-  { key: 'distance', icon: 'pin', color: C.blue, label: 'Distance' },
-  { key: 'steps', icon: 'steps', color: C.sky, label: 'Steps' },
-  { key: 'date', icon: 'calendar', color: C.violet, label: 'Date' },
-  { key: 'stand', icon: 'stand', color: C.cyan, label: 'Stand' },
+const tileLabelY = (box) => box.y + TILE.labelDy
+const tileValueY = (box) => box.y + box.h - TILE.valueDy
+
+/**
+ * Every metric cell on the face: where it sits, how it is drawn, and which
+ * system app a tap on it opens. Tap targets are the whole tile.
+ */
+const SLOTS = [
+  {
+    key: 'hr',
+    box: { x: 12, y: 28, w: 120, h: 78 },
+    icon: 'heart',
+    iconColor: C.pink,
+    gauge: { dx: 40, dy: 11, w: 66, h: 14 }, // heart-rate zone bar, replaces the label
+    value: { size: 31, color: C.pink, w: 54 },
+    unit: { text: 'BPM', color: C.white, size: 15, dx: 66, w: 48 },
+    app: 'HR',
+  },
+  {
+    key: 'distance',
+    box: { x: 12, y: 112, w: 120, h: 78 },
+    icon: 'pin',
+    iconColor: C.blue,
+    label: 'Distance',
+    value: { size: 31, color: C.pink, w: 64 },
+    unit: { text: 'KM', color: C.blue, size: 15, dx: 76, w: 36 },
+    app: 'STATUS',
+  },
+  {
+    key: 'steps',
+    box: { x: 12, y: 196, w: 120, h: 78 },
+    icon: 'steps',
+    iconColor: C.sky,
+    label: 'Steps',
+    value: { size: 31, color: C.pink, w: 96 },
+    app: 'STATUS',
+  },
+  {
+    key: 'date',
+    box: { x: 12, y: 280, w: 118, h: 68 },
+    icon: 'calendar',
+    iconColor: C.violet,
+    label: 'Date',
+    value: { size: 27, color: C.pink, w: 94 },
+    app: 'CALENDAR',
+  },
+  {
+    key: 'stand',
+    box: { x: 136, y: 280, w: 100, h: 68 },
+    icon: 'stand',
+    iconColor: C.cyan,
+    label: 'Stand',
+    value: { size: 29, color: C.pink, w: 38 },
+    unit: { color: C.cyan, size: 21, dx: 46, w: 46 }, // text comes from the goal
+    app: 'STATUS',
+  },
+  {
+    key: 'battery',
+    box: { x: 242, y: 280, w: 138, h: 68 },
+    icon: 'bolt',
+    iconColor: C.cyan,
+    wave: { dx: 40, dy: 7, w: 86, h: 26 }, // battery wave, replaces the label
+    value: { size: 29, color: C.cyan, w: 60 },
+    app: 'SETTING',
+  },
 ]
 
-const rowY = (i) => COL.row0Y + i * COL.rowH
-
-// heart-rate mini bar that replaces the label on row 0
-const HR_BAR = { x: COL.labelX, w: 68, h: 13, dy: 3 }
-
-// Boxes for the live values and their trailing units, left-aligned inside the
-// column. Widths are sized for the largest plausible reading.
-const VALUE_BOX = {
-  hr: { x: COL.x, w: 52 },
-  distance: { x: COL.x, w: 70 },
-  steps: { x: COL.x, w: COL.w },
-  date: { x: COL.x, w: COL.w },
-  stand: { x: COL.x, w: 40 },
-}
-
-const UNIT_BOX = {
-  hr: { x: COL.x + 53, w: 62, size: COL.unitSize },
-  distance: { x: COL.x + 71, w: 46, size: COL.unitSize },
-  stand: { x: COL.x + 41, w: 70, size: 21 },
-}
-
-// ------------------------------------------------------------- battery -----
-const BAT = {
-  y: 300,
-  iconSize: 20,
-  valueX: 38,
-  valueW: 54,
-  valueSize: 26,
-  waveX: 94,
-  waveY: 298,
-  waveW: 118,
-  waveH: 34,
-  waveSteps: 21, // 0%, 5% … 100%
-}
+const BAT = { waveSteps: 21 } // 0%, 5% … 100%
 
 // ---------------------------------------------------------------- pill -----
 const PILL = {
-  x: 16,
-  y: 362,
-  w: 358,
-  h: 66,
-  r: 33,
-  cells: ['Temp', 'Kcal', 'Stress', 'PAI'],
-  labelY: 372,
-  labelH: 20,
-  labelSize: 14,
-  valueY: 392,
-  valueH: 30,
-  valueSize: 25,
-  divTop: 378,
-  divBottom: 414,
+  x: 12,
+  y: 356,
+  w: 368,
+  h: 68,
+  r: 34,
+  labelSize: 15,
+  valueSize: 28,
+  divInset: 16,
+  cells: [
+    { key: 'temp', label: 'Temp', app: 'WEATHER' },
+    { key: 'kcal', label: 'Kcal', app: 'STATUS' },
+    { key: 'stress', label: 'Stress', app: 'PRESSURE' },
+    { key: 'pai', label: 'PAI', app: 'PAI' },
+  ],
 }
 
 const cellW = PILL.w / PILL.cells.length
@@ -136,24 +173,27 @@ const cellCenter = (i) => Math.round(PILL.x + cellW * (i + 0.5))
 const cellDivider = (i) => Math.round(PILL.x + cellW * (i + 1)) // i = 0..2
 
 // --------------------------------------------------------------- AOD -------
-// The AOD layer keeps only the orbital dial, with the digital time inside the
-// minute ring — few lit pixels, still readable at a glance.
+// Centred on the screen rather than inheriting the dial's top-right position,
+// since none of the tiles are drawn in this state.
 const AOD = {
-  // Centred on the screen rather than inheriting the dial's off-centre
-  // position, since the stats column is not drawn in this state.
   cx: 195,
-  cy: 205,
+  cy: 210,
+  // Roomier than the daytime dial — with the tiles gone there is space for it,
+  // and the wider inner ring leaves the digital time an uncluttered middle.
+  // The chips sit *on* their rings here instead of growing inwards.
+  rHour: 132,
+  rMin: 84,
   hourDotR: 3,
   quarterDotR: 4.2,
-  minDotR: 1.6,
+  minDotR: 2,
   x: 85,
   w: 220,
-  timeY: 167,
-  timeH: 50,
-  timeSize: 40,
+  timeY: 173,
+  timeH: 46,
+  timeSize: 34,
   dateY: 221,
   dateH: 22,
-  dateSize: 18,
+  dateSize: 17,
 }
 
 // ------------------------------------------------------------- helpers -----
@@ -205,24 +245,20 @@ function hourColor(hour) {
 }
 
 function minuteLabelColor(minute) {
-  if (minute === 0) return '#cfc8dc'
-  return hsl(ringHue(minute * 6), 36, 66)
-}
-
-function minuteDotColor(minute) {
-  return hsl(ringHue(minute * 6), 42, 50)
+  if (minute === 0) return '#d6cfe2'
+  return hsl(ringHue(minute * 6), 38, 66)
 }
 
 const pad2 = (n) => (n < 10 ? '0' + n : String(n))
 
 // --------------------------------------------------------------- icons -----
-// 24 x 24 viewBox. `fill` shapes are emitted with the row colour.
+// 24 x 24 viewBox. `fill` shapes are emitted with the slot colour.
 const ICONS = {
   heart:
     '<path d="M12 21.2c-.4 0-.8-.2-1.1-.4C6.1 17 2.4 13.6 2.4 9.6c0-3 2.3-5.2 5.1-5.2 1.8 0 3.4.9 4.5 2.4 1.1-1.5 2.7-2.4 4.5-2.4 2.8 0 5.1 2.2 5.1 5.2 0 4-3.7 7.4-8.5 11.2-.3.2-.7.4-1.1.4z"/>',
   pin:
     '<path d="M12 1.8c-3.9 0-7 3.1-7 7 0 5.1 6 12.3 6.3 12.6.2.2.5.2.7 0 .3-.3 7-7.5 7-12.6 0-3.9-3.1-7-7-7zm0 9.7a2.7 2.7 0 1 1 0-5.4 2.7 2.7 0 0 1 0 5.4z"/>',
-  // one bold footprint reads far better than a pair at 19 px
+  // one bold footprint reads far better than a pair at 20 px
   steps:
     '<g><ellipse cx="11.2" cy="14.6" rx="5.1" ry="7.4" transform="rotate(-7 11.2 14.6)"/>' +
     '<circle cx="5.5" cy="5.6" r="2"/><circle cx="10.1" cy="3.6" r="2.3"/>' +
@@ -246,16 +282,14 @@ module.exports = {
   H,
   C,
   DIAL,
-  COL,
-  ROWS,
-  HR_BAR,
-  VALUE_BOX,
-  UNIT_BOX,
+  TILE,
+  SLOTS,
   BAT,
   PILL,
   AOD,
   ICONS,
-  rowY,
+  tileLabelY,
+  tileValueY,
   cellW,
   cellCenter,
   cellDivider,
@@ -264,6 +298,5 @@ module.exports = {
   ringHue,
   hourColor,
   minuteLabelColor,
-  minuteDotColor,
   pad2,
 }
