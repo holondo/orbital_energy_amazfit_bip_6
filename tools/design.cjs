@@ -49,25 +49,27 @@ const C = {
 // so the hour marker's inner edge must clear the minute marker's outer edge.
 // checkGeometry() below enforces it at asset-build time.
 const DIAL = {
-  cx: 256,
-  cy: 145,
-  rHour: 113, // radius of the 24 hour markers
+  cx: 252,
+  cy: 140,
+  rHour: 119, // radius of the 24 hour markers
   rMin: 49, // radius of the 12 minute markers
   hourChipR: 13.5, // faint disc behind each hour number
   minChipR: 11.5,
   hourFont: 16,
   minFont: 13,
 
-  // The outer edge of the hour marker is what the screen pins down: the tiles
-  // end at x=122 and the middle row starts at y=280, which leaves 130px of
-  // reach from the centre. Everything else grows inwards from there.
+  // The dial's footprint is a disc of radius rHour + hourOverhang, so it can sit
+  // tangent to the top and right edges however round the display corners are:
+  // eroding a rounded rect by a radius at least as large as the corner radius
+  // leaves a plain rectangle. Only the tiles at x<=112 and the middle row at
+  // y=280 actually constrain it, and the horizontal side binds first at 136.
   hourOverhang: 17, // how far past the hour ring the marker reaches
   minOverhang: 13,
-  hlHourR: 34,
+  hlHourR: 37,
   hlMinR: 28,
-  hlHourBox: 72, // sprite size (marker + glow)
+  hlHourBox: 78, // sprite size (marker + glow)
   hlMinBox: 60,
-  hlHourFont: 38,
+  hlHourFont: 40,
   hlMinFont: 32,
 }
 
@@ -91,10 +93,10 @@ DIAL.hlMinCentre = DIAL.rMin + DIAL.minOverhang - DIAL.hlMinR
 // ---------------------------------------------------------------- tiles ----
 const TILE = {
   r: 18,
-  pad: 10,
+  pad: 9,
   iconSize: 20,
-  labelDx: 34,
-  labelSize: 15,
+  labelDx: 32,
+  labelSize: 14,
   labelDy: 20, // centre line of the icon + label row
   valueDy: 24, // distance from the tile's bottom edge to the value centre
 }
@@ -109,53 +111,54 @@ const tileValueY = (box) => box.y + box.h - TILE.valueDy
 const SLOTS = [
   {
     key: 'hr',
-    box: { x: 12, y: 28, w: 110, h: 78 },
+    box: { x: 12, y: 28, w: 100, h: 78 },
     icon: 'heart',
     iconColor: C.pink,
-    meter: { name: 'hr', dx: 34, dy: 11, w: 66, h: 14 }, // zone bar, replaces the label
-    value: { size: 31, color: C.pink, w: 52 },
-    unit: { text: 'BPM', color: C.white, size: 14, dx: 64, w: 40 },
+    meter: { name: 'hr', dx: 32, dy: 11, w: 59, h: 14 }, // zone bar, replaces the label
+    value: { size: 28, color: C.pink, w: 48 },
+    unit: { text: 'BPM', color: C.white, size: 13, dx: 58, w: 34 },
     dataType: 'HEART',
     app: 'HR',
   },
   {
     key: 'distance',
-    box: { x: 12, y: 112, w: 110, h: 78 },
+    box: { x: 12, y: 112, w: 100, h: 78 },
     icon: 'pin',
     iconColor: C.blue,
     label: 'Distance',
-    value: { size: 31, color: C.pink, w: 62 },
-    unit: { text: 'KM', color: C.blue, size: 14, dx: 74, w: 30 },
+    value: { size: 28, color: C.pink, w: 56 },
+    unit: { text: 'KM', color: C.blue, size: 13, dx: 66, w: 26 },
     dataType: 'DISTANCE',
     app: 'STATUS',
   },
   {
     key: 'steps',
-    box: { x: 12, y: 196, w: 110, h: 78 },
+    box: { x: 12, y: 196, w: 100, h: 78 },
     icon: 'steps',
     iconColor: C.sky,
     label: 'Steps',
-    value: { size: 31, color: C.pink, w: 90 },
+    value: { size: 28, color: C.pink, w: 82 },
     dataType: 'STEP',
     app: 'STATUS',
   },
   {
     key: 'date',
-    box: { x: 12, y: 280, w: 150, h: 68 },
+    // squared off with the column above it, which hands the width to the battery
+    box: { x: 12, y: 280, w: 100, h: 68 },
     icon: 'calendar',
     iconColor: C.violet,
     label: 'Date',
-    value: { size: 29, color: C.pink, w: 126 },
+    value: { size: 24, color: C.pink, w: 82 },
     app: 'CALENDAR',
   },
   {
     key: 'battery',
-    box: { x: 170, y: 280, w: 210, h: 68 },
+    box: { x: 118, y: 280, w: 262, h: 68 },
     icon: 'bolt',
     iconColor: C.cyan,
     label: 'Battery',
-    meter: { name: 'battery', dx: 64, dy: 31, w: 134, h: 26 }, // sits beside the reading
-    value: { size: 29, color: C.cyan, w: 52 },
+    meter: { name: 'battery', dx: 62, dy: 31, w: 191, h: 26 }, // sits beside the reading
+    value: { size: 28, color: C.cyan, w: 50 },
     dataType: 'BATTERY',
     app: 'SETTING',
   },
@@ -217,7 +220,7 @@ const AOD = {
   // Roomier than the daytime dial — with the tiles gone there is space for it,
   // and the wider inner ring leaves the digital time an uncluttered middle.
   // The chips sit *on* their rings here instead of growing inwards.
-  rHour: 144,
+  rHour: 150,
   rMin: 82,
   hourDotR: 3,
   quarterDotR: 4.2,

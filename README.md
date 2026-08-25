@@ -8,12 +8,17 @@ o anel externo carrega as 24 horas, o anel interno as marcas de 5 minutos, e um
 marcador iluminado indica a posição atual em cada um. Os dois crescem *para
 dentro*, em direção ao centro.
 
-O que limita tudo é a borda externa do marcador da hora: os blocos terminam em
-`x=122` e a faixa do meio começa em `y=280`, o que deixa 130 px de alcance a
-partir do centro. Daí para dentro cabem 68 px de diâmetro na hora e 56 px no
-minuto, encostando um no outro sem se sobrepor. Para dar mais mostrador, o
-caminho é estreitar os blocos — cada pixel que sai da coluna da esquerda vira
-meio pixel de raio.
+A pegada do mostrador é um disco de raio `rHour + hourOverhang`, e por ser um
+disco ele pode encostar na borda de cima e na da direita por mais arredondado
+que seja o canto do display: erodir um retângulo arredondado por um raio maior
+que o do canto deixa um retângulo reto. Quem limita, então, são só os blocos
+(terminam em `x=112`) e a faixa do meio (começa em `y=280`) — e o lado
+horizontal aperta primeiro, em 136 px de alcance. Daí para dentro cabem 74 px
+de diâmetro na hora e 56 px no minuto, encostando um no outro sem se sobrepor.
+
+Para dar mais mostrador, o caminho é estreitar a coluna da esquerda: cada pixel
+que sai dela vira meio pixel de raio. Encolher a cápsula de baixo não ajuda
+enquanto o lado horizontal for o que aperta.
 
 Os indicadores são blocos: frequência cardíaca, distância e passos à esquerda;
 data e bateria na faixa do meio; temperatura, calorias, estresse e PAI na
@@ -99,7 +104,7 @@ chega a ser desenhada — o mesmo defeito que fazia o minuto parecer congelado. 
 `resume_call` do `WIDGET_DELEGATE` redesenha tudo ao acordar, e com isso o
 tamanho voltou a ser livre.
 
-`MAX_SPRITE` continua em `tools/design.cjs`, agora em 72, como alarme e não como
+`MAX_SPRITE` continua em `tools/design.cjs`, agora em 80, como alarme e não como
 limite físico. `checkGeometry()` roda a cada `npm run assets` e quebra o build se
 um sprite passar disso ou se os dois marcadores puderem se sobrepor.
 

@@ -272,7 +272,90 @@ createWidget(widget.BUTTON, {
 
 ---
 
-## 5. Sensors and their semantics
+## 5. Themes — the editable watchface
+
+The pencil icon on the watchface list, and the carousel of colour variants
+behind it, come from one manifest flag plus one widget.
+
+**app.json**, inside the watchface module:
+
+```json
+"watchface": { "path": "watchface/index", "main": 1, "editable": 1 }
+```
+
+**The widget.** `WATCHFACE_EDIT_BG` both draws the background and provides the
+carousel. Create it *instead of* your background `IMG`, and create it first so
+everything else lands on top:
+
+```js
+const editBg = createWidget(widget.WATCHFACE_EDIT_BG, {
+  edit_id: 103,             // unique among the WATCHFACE_EDIT_* widgets
+  x: 0, y: 0,
+  bg_config: [
+    { id: 1, path: 't1/bg.png', preview: 't1/preview.png' },
+    { id: 2, path: 't2/bg.png', preview: 't2/preview.png' },
+  ],
+  count: 2,
+  default_id: 1,
+  fg: 'edit/fg.png',        // full-screen overlay drawn above the background
+  tips_x: 178, tips_y: 428,
+  tips_bg: 'edit/tips.png', // backdrop for the "swipe to change" hint
+  show_level: LV_NORMAL | LV_EDIT,
+})
+```
+
+`count` and `default_id` are **siblings** of `bg_config`, not fields inside it.
+
+- `path` — the background drawn in normal mode for that theme.
+- `preview` — what the carousel shows while cycling. The stock faces make this
+  a **full-screen render of the entire face** in that theme (400x450 in the
+  extracted package), not a thumbnail: during editing the user is looking at
+  this image, not at your widgets.
+
+**Reading the choice back:**
+
+```js
+const themeId = editBg.getProperty(prop.CURRENT_TYPE) || 1
+```
+
+`prop.CURRENT_TYPE` is what the stock Bip 6 face uses. It is not in the
+`@zos/ui` typings, so guard it. (The docs mention `prop.CURRENT_CONFIG` — that
+belongs to the pointer-style editor, a different widget.)
+
+**The part the widget does not do.** It swaps *only the background*. Every
+other coloured asset — marker sprites, meter frames, digit glyphs, icons — and
+every `color:` passed to a `TEXT` widget has to be picked from `themeId` by
+your own code. That is why every asset in the stock package is suffixed
+`_theme1` … `_theme7`.
+
+So the order in `build()` is:
+
+1. create the edit widget
+2. read `CURRENT_TYPE`
+3. build every other asset path with that id, and resolve text colours from a
+   per-theme palette table
+
+Practically: give the generator a `THEMES` table of palettes, emit one asset
+folder per theme (`t1/…`, `t2/…`), and have `layout.js` export the palettes as
+`0xrrggbb` ints plus path builders that take the theme id. Keep the
+colour-independent assets (the AOD layer, the transparent hit areas) outside
+the theme folders so they are generated once.
+
+Note that a theme change only reaches your own widgets when the face reloads —
+they were created with the previous theme's colours. That is exactly why
+`preview` is a full render.
+
+Budget before committing: everything colour-bearing multiplies. A face with 84
+marker sprites, 42 meter frames and 13 digit glyphs costs ~140 assets per
+theme; the stock seven-theme face ships 775.
+
+**Sibling editors**, same shape: `WATCHFACE_EDIT_GROUP` (which metric a slot
+shows), `WATCHFACE_EDIT_POINTER`, `WATCHFACE_EDIT_MASK`,
+`WATCHFACE_EDIT_FG_MASK`.
+
+---
+
+## 6. Sensors and their semantics
 
 ```js
 import { Time, Battery, Step, HeartRate, Distance, Stand,
@@ -318,7 +401,7 @@ Change listeners exist for the fast-moving ones and are worth registering:
 
 ---
 
-## 6. Assets
+## 7. Assets
 
 ### The reference package is not editable art
 
@@ -385,7 +468,7 @@ usually lands on background.
 
 ---
 
-## 7. AOD
+## 8. AOD
 
 Tag widgets with `show_level` and keep both states in one file:
 
@@ -398,11 +481,11 @@ table for it rather than reusing the daytime one.
 
 ---
 
-## 8. Verifying without a watch
+## 9. Verifying without a watch
 
 The single highest-leverage tool in this project. Build it early.
 
-### 8.1 Offline runtime harness
+### 9.1 Offline runtime harness
 
 Load `watchface/index.js` with the `@zos` modules stubbed, run the **real**
 lifecycle, then rasterise every widget that was created. What you get is what
@@ -434,7 +517,7 @@ $env:SIM_BARE='1'   # strip IMG_CLICK, deleteWidget, prop.VISIBLE, data types
 Extreme values catch the layout bugs: three-digit heart rates, five-digit step
 counts, 100% battery pushing a unit label out of its tile.
 
-### 8.2 Diff a device screenshot against expected
+### 9.2 Diff a device screenshot against expected
 
 When something renders wrong on hardware and you cannot see why, composite what
 *should* be there (`bg.png` plus the sprites at their computed positions) and
@@ -446,7 +529,7 @@ clipped to exactly its top-left 48x48", which is a solvable statement.
 The simulator's Screenshot button writes to `~/Downloads/screenshot-HHMMSSmmm.png`
 at full 390x450.
 
-### 8.3 Capture the simulator window
+### 9.3 Capture the simulator window
 
 `Graphics.CopyFromScreen` only captures what is visible. Use `PrintWindow` with
 flag `2` (`PW_RENDERFULLCONTENT`) to grab the window even when it is behind
@@ -457,7 +540,7 @@ others, and find the handle by enumerating windows for the title
 
 ---
 
-## 9. Layout notes for 390 x 450
+## 10. Layout notes for 390 x 450
 
 - Corner radius ~45 px. A point needs the corner check only when
   `x > 390 - R` **and** `y < R` (and the mirrored cases).
@@ -473,7 +556,7 @@ others, and find the handle by enumerating windows for the title
 
 ---
 
-## 10. Order of work
+## 11. Order of work
 
 1. Get `zeus status` green (login + simulator connected) and the emulator
    **started**, not just open.
@@ -488,7 +571,7 @@ others, and find the handle by enumerating windows for the title
 7. For anything visual that is wrong on hardware, diff a screenshot rather than
    guessing.
 
-## 11. Symptom index
+## 12. Symptom index
 
 | Symptom | Cause |
 | --- | --- |
