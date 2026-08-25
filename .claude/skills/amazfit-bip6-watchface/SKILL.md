@@ -466,6 +466,10 @@ others, and find the handle by enumerating windows for the title
 - Body text 15 px, values 27–31 px, hero numbers 32–36 px.
 - Verify against 00:00 and 12:30 when two rotating elements can align — that is
   when overlapping elements collide.
+- A round dial is bounded by whatever crowds it on **all four** sides, and it
+  grows by twice what you free up on the tightest one. Work out the reach
+  first (`min(edge - neighbour)` horizontally and vertically), then derive the
+  radii from it, rather than picking radii and hoping they fit.
 
 ---
 

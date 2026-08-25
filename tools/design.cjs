@@ -49,25 +49,25 @@ const C = {
 // so the hour marker's inner edge must clear the minute marker's outer edge.
 // checkGeometry() below enforces it at asset-build time.
 const DIAL = {
-  cx: 261,
-  cy: 148,
-  rHour: 108, // radius of the 24 hour markers
+  cx: 256,
+  cy: 145,
+  rHour: 113, // radius of the 24 hour markers
   rMin: 49, // radius of the 12 minute markers
   hourChipR: 13.5, // faint disc behind each hour number
   minChipR: 11.5,
   hourFont: 16,
   minFont: 13,
 
-  // The outer edge of the hour marker is pinned by the screen: it can reach
-  // 125px from the centre before it would touch the tiles on one side or run
-  // off the edge on the other. Everything else grows inwards from there.
+  // The outer edge of the hour marker is what the screen pins down: the tiles
+  // end at x=122 and the middle row starts at y=280, which leaves 130px of
+  // reach from the centre. Everything else grows inwards from there.
   hourOverhang: 17, // how far past the hour ring the marker reaches
   minOverhang: 13,
-  hlHourR: 31,
+  hlHourR: 34,
   hlMinR: 28,
-  hlHourBox: 66, // sprite size (marker + glow)
+  hlHourBox: 72, // sprite size (marker + glow)
   hlMinBox: 60,
-  hlHourFont: 36,
+  hlHourFont: 38,
   hlMinFont: 32,
 }
 
@@ -83,7 +83,7 @@ const DIAL = {
  * fault that made the minute appear to freeze. WIDGET_DELEGATE's resume_call
  * now redraws everything on wake, so the size is free again.
  */
-const MAX_SPRITE = 72
+const MAX_SPRITE = 80
 
 DIAL.hlHourCentre = DIAL.rHour + DIAL.hourOverhang - DIAL.hlHourR
 DIAL.hlMinCentre = DIAL.rMin + DIAL.minOverhang - DIAL.hlMinR
@@ -91,9 +91,9 @@ DIAL.hlMinCentre = DIAL.rMin + DIAL.minOverhang - DIAL.hlMinR
 // ---------------------------------------------------------------- tiles ----
 const TILE = {
   r: 18,
-  pad: 12,
+  pad: 10,
   iconSize: 20,
-  labelDx: 38,
+  labelDx: 34,
   labelSize: 15,
   labelDy: 20, // centre line of the icon + label row
   valueDy: 24, // distance from the tile's bottom edge to the value centre
@@ -109,33 +109,33 @@ const tileValueY = (box) => box.y + box.h - TILE.valueDy
 const SLOTS = [
   {
     key: 'hr',
-    box: { x: 12, y: 28, w: 120, h: 78 },
+    box: { x: 12, y: 28, w: 110, h: 78 },
     icon: 'heart',
     iconColor: C.pink,
-    meter: { name: 'hr', dx: 40, dy: 11, w: 66, h: 14 }, // zone bar, replaces the label
-    value: { size: 31, color: C.pink, w: 54 },
-    unit: { text: 'BPM', color: C.white, size: 15, dx: 66, w: 48 },
+    meter: { name: 'hr', dx: 34, dy: 11, w: 66, h: 14 }, // zone bar, replaces the label
+    value: { size: 31, color: C.pink, w: 52 },
+    unit: { text: 'BPM', color: C.white, size: 14, dx: 64, w: 40 },
     dataType: 'HEART',
     app: 'HR',
   },
   {
     key: 'distance',
-    box: { x: 12, y: 112, w: 120, h: 78 },
+    box: { x: 12, y: 112, w: 110, h: 78 },
     icon: 'pin',
     iconColor: C.blue,
     label: 'Distance',
-    value: { size: 31, color: C.pink, w: 64 },
-    unit: { text: 'KM', color: C.blue, size: 15, dx: 76, w: 36 },
+    value: { size: 31, color: C.pink, w: 62 },
+    unit: { text: 'KM', color: C.blue, size: 14, dx: 74, w: 30 },
     dataType: 'DISTANCE',
     app: 'STATUS',
   },
   {
     key: 'steps',
-    box: { x: 12, y: 196, w: 120, h: 78 },
+    box: { x: 12, y: 196, w: 110, h: 78 },
     icon: 'steps',
     iconColor: C.sky,
     label: 'Steps',
-    value: { size: 31, color: C.pink, w: 96 },
+    value: { size: 31, color: C.pink, w: 90 },
     dataType: 'STEP',
     app: 'STATUS',
   },

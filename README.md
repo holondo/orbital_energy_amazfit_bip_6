@@ -6,9 +6,14 @@ aparelho: `9765120`, `9765121` e `10158337`.
 O mostrador fica ancorado no canto superior direito e é lido como duas órbitas:
 o anel externo carrega as 24 horas, o anel interno as marcas de 5 minutos, e um
 marcador iluminado indica a posição atual em cada um. Os dois crescem *para
-dentro*, em direção ao centro: a borda externa do marcador da hora é o que a
-tela limita (125 px do centro), e daí para dentro há espaço para 62 px de
-diâmetro na hora e 56 px no minuto, encostando um no outro sem se sobrepor.
+dentro*, em direção ao centro.
+
+O que limita tudo é a borda externa do marcador da hora: os blocos terminam em
+`x=122` e a faixa do meio começa em `y=280`, o que deixa 130 px de alcance a
+partir do centro. Daí para dentro cabem 68 px de diâmetro na hora e 56 px no
+minuto, encostando um no outro sem se sobrepor. Para dar mais mostrador, o
+caminho é estreitar os blocos — cada pixel que sai da coluna da esquerda vira
+meio pixel de raio.
 
 Os indicadores são blocos: frequência cardíaca, distância e passos à esquerda;
 data e bateria na faixa do meio; temperatura, calorias, estresse e PAI na

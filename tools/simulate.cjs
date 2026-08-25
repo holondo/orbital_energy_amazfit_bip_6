@@ -105,7 +105,8 @@ const READING = Object.assign(
     standTarget: 12,
     calorie: 450,
     stress: 56,
-    paiToday: 22,
+    paiTotal: 23,
+    paiToday: 0, // realistic: nothing earned yet today
     battery: 65,
   },
   process.env.SIM ? JSON.parse(process.env.SIM) : {}
@@ -138,7 +139,7 @@ class Stand {
 }
 class Calorie { getCurrent() { return READING.calorie } getTarget() { return 500 } onChange() {} offChange() {} }
 class Stress { getCurrent() { return { value: READING.stress, time: 0 } } onChange() {} offChange() {} }
-class Pai { getToday() { return READING.paiToday } getTotal() { return 120 } }
+class Pai { getToday() { return READING.paiToday } getTotal() { return READING.paiTotal } }
 
 const launched = []
 const SYSTEM_APPS = {

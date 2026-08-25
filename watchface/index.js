@@ -526,7 +526,10 @@ WatchFace({
     const stress = this.stress.getCurrent()
     this.setText('stress', stress && stress.value > 0 ? '' + stress.value : '--')
 
-    this.setText('pai', '' + (this.pai.getToday() || 0))
+    // getToday() is only what was earned since midnight, so it reads 0 for
+    // most of the day. getTotal() is the rolling 7-day score — the number the
+    // watch's own PAI screen shows.
+    this.setText('pai', '' + Math.round(this.pai.getTotal() || 0))
   },
 
   onDestroy() {
