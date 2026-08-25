@@ -1,0 +1,17 @@
+{
+  "name": "orbit-energy-bip-6",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Custom Amazfit Bip 6 watchface development workspace",
+  "scripts": {
+    "assets": "node tools/build-assets.cjs",
+    "build": "npm run assets && zeus build --ip false",
+    "dev": "npm run assets && zeus dev",
+    "login": "zeus login",
+    "preview": "zeus preview",
+    "status": "zeus status"
+  },
+  "devDependencies": {
+    "@zeppos/device-types": "^4.0.0"
+  }
+}
