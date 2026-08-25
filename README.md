@@ -5,9 +5,10 @@ aparelho: `9765120`, `9765121` e `10158337`.
 
 O mostrador fica ancorado no canto superior direito e é lido como duas órbitas:
 o anel externo carrega as 24 horas, o anel interno as marcas de 5 minutos, e um
-marcador iluminado indica a posição atual em cada um. Os dois marcadores crescem
-*para dentro*, em direção ao centro vazio, então ficam grandes sem empurrar o
-mostrador para fora da tela.
+marcador iluminado indica a posição atual em cada um. Os dois crescem *para
+dentro*, em direção ao centro: a borda externa do marcador da hora é o que a
+tela limita (125 px do centro), e daí para dentro há espaço para 62 px de
+diâmetro na hora e 56 px no minuto, encostando um no outro sem se sobrepor.
 
 Os indicadores são blocos: frequência cardíaca, distância e passos à esquerda;
 data e bateria na faixa do meio; temperatura, calorias, estresse e PAI na
@@ -75,16 +76,27 @@ em `tools/design.cjs` reposiciona a arte e os widgets ao mesmo tempo. Não exist
 coordenada duplicada entre o desenho e o código.
 
 Os marcadores das órbitas são 84 sprites prontos (`hl/h00.png` … `hl/m59.png`).
-Eles são **recriados**, não movidos: mexer num `IMG` grande com
-`setProperty(MORE, {x, y, src})` volta truncado no aparelho — o marcador da hora
-apareceu desenhado só no canto superior esquerdo de 48×48 do sprite de 56×56,
-enquanto o marcador do minuto (52×52), atualizado do mesmo jeito no mesmo
-quadro, ficou perfeito. Recriar também reposiciona o widget no fim da lista de
-desenho, que é onde esses marcadores devem estar: **acima de todo o resto**.
+Eles são **recriados**, não movidos — assim o widget novo entra no fim da lista
+de desenho, que é onde esses marcadores devem estar: **acima de todo o resto**.
 
-Daí a constante `MAX_SPRITE = 52` em `tools/design.cjs`. `checkGeometry()` roda
-a cada `npm run assets` e quebra o build se um sprite passar disso ou se os dois
-marcadores puderem se sobrepor.
+### O falso limite de tamanho
+
+Um marcador de 56×56 já voltou do aparelho desenhado só no seu canto superior
+esquerdo de 48×48, enquanto o de 52×52 ao lado, atualizado do mesmo jeito no
+mesmo quadro, estava perfeito. Parecia um teto de tamanho, e por um tempo o
+projeto ficou preso em 52 px por causa disso.
+
+Não era. O `bg.png` tem 390×450 e nunca trunca. O que diferia entre os dois
+marcadores era **quando** cada um tinha sido atualizado pela última vez: a hora
+virou às 14:00, quase certamente com a tela apagada; o minuto, 17 segundos antes
+da captura, com ela ligada. Atualização que acontece com a tela apagada não
+chega a ser desenhada — o mesmo defeito que fazia o minuto parecer congelado. O
+`resume_call` do `WIDGET_DELEGATE` redesenha tudo ao acordar, e com isso o
+tamanho voltou a ser livre.
+
+`MAX_SPRITE` continua em `tools/design.cjs`, agora em 72, como alarme e não como
+limite físico. `checkGeometry()` roda a cada `npm run assets` e quebra o build se
+um sprite passar disso ou se os dois marcadores puderem se sobrepor.
 
 ### Ajustes comuns
 

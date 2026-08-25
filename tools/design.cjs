@@ -49,34 +49,41 @@ const C = {
 // so the hour marker's inner edge must clear the minute marker's outer edge.
 // checkGeometry() below enforces it at asset-build time.
 const DIAL = {
-  cx: 258,
+  cx: 261,
   cy: 148,
-  rHour: 107, // radius of the 24 hour markers
-  rMin: 58, // radius of the 12 minute markers
+  rHour: 108, // radius of the 24 hour markers
+  rMin: 49, // radius of the 12 minute markers
   hourChipR: 13.5, // faint disc behind each hour number
   minChipR: 11.5,
   hourFont: 16,
   minFont: 13,
 
-  hourOverhang: 16, // how far past the hour ring the marker reaches
+  // The outer edge of the hour marker is pinned by the screen: it can reach
+  // 125px from the centre before it would touch the tiles on one side or run
+  // off the edge on the other. Everything else grows inwards from there.
+  hourOverhang: 17, // how far past the hour ring the marker reaches
   minOverhang: 13,
-  hlHourR: 24,
-  hlMinR: 23,
-  hlHourBox: 52, // sprite size (marker + glow); see MAX_SPRITE below
-  hlMinBox: 52,
-  hlHourFont: 29,
-  hlMinFont: 27,
+  hlHourR: 31,
+  hlMinR: 28,
+  hlHourBox: 66, // sprite size (marker + glow)
+  hlMinBox: 60,
+  hlHourFont: 36,
+  hlMinFont: 32,
 }
 
 /**
- * Largest sprite the watch draws reliably.
+ * Sanity bound on the moving sprites — a tripwire, not a hardware limit.
  *
- * A 56x56 marker came back from the device rendered as only its top-left
- * 48x48; the 52x52 one beside it, updated the same way in the same frame, was
- * pixel-perfect. Until that is understood, keep every moving sprite at 52 or
- * below.
+ * A 56x56 marker once came back from the device drawn as only its top-left
+ * 48x48 while the 52x52 one beside it was perfect, which looked like a size
+ * cap. It was not: bg.png is 390x450 and never truncates. The two markers
+ * differed in *when* they were last updated — the hour had changed at 14:00
+ * with the screen off, the minute 17 seconds before the capture with it on.
+ * Updates that land while the screen is off do not render, which is the same
+ * fault that made the minute appear to freeze. WIDGET_DELEGATE's resume_call
+ * now redraws everything on wake, so the size is free again.
  */
-const MAX_SPRITE = 52
+const MAX_SPRITE = 72
 
 DIAL.hlHourCentre = DIAL.rHour + DIAL.hourOverhang - DIAL.hlHourR
 DIAL.hlMinCentre = DIAL.rMin + DIAL.minOverhang - DIAL.hlMinR
@@ -210,8 +217,8 @@ const AOD = {
   // Roomier than the daytime dial — with the tiles gone there is space for it,
   // and the wider inner ring leaves the digital time an uncluttered middle.
   // The chips sit *on* their rings here instead of growing inwards.
-  rHour: 132,
-  rMin: 84,
+  rHour: 144,
+  rMin: 82,
   hourDotR: 3,
   quarterDotR: 4.2,
   minDotR: 2,
