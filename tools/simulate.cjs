@@ -12,6 +12,7 @@
 const fs = require('fs')
 const path = require('path')
 const { Resvg } = require('@resvg/resvg-js')
+const { PNG } = require('pngjs')
 const D = require('./design.cjs')
 
 const ROOT = path.resolve(__dirname, '..')
@@ -35,24 +36,44 @@ const widget = {
   IMG: 'IMG',
   IMG_CLICK: 'IMG_CLICK',
   BUTTON: 'BUTTON',
+  WIDGET_DELEGATE: 'WIDGET_DELEGATE',
   TEXT: 'TEXT',
   FILL_RECT: 'FILL_RECT',
   TEXT_IMG: 'TEXT_IMG',
   ARC: 'ARC',
   IMG_LEVEL: 'IMG_LEVEL',
 }
-const data_type = { WEATHER_CURRENT: 'WEATHER_CURRENT' }
-
-const created = []
-
 // The firmware has no hmUI global — everything the watchface uses comes from
 // @zos/ui. SIM_BARE=1 strips the members that are undocumented there
-// (deleteWidget, IMG_CLICK, prop.VISIBLE) to exercise the fallback paths.
+// (deleteWidget, IMG_CLICK, prop.VISIBLE, the watchface data types) to
+// exercise the fallback paths.
 const BARE = process.env.SIM_BARE === '1'
 if (BARE) {
   delete widget.IMG_CLICK
   delete prop.VISIBLE
 }
+
+const data_type = {
+  HEART: 1, STEP: 2, DISTANCE: 3, CAL: 4, BATTERY: 5,
+  STRESS: 6, PAI_DAILY: 7, WEATHER_CURRENT: 'WEATHER_CURRENT',
+}
+if (BARE) {
+  // watchface-only members the @zos/ui typings do not promise
+  for (const k of ['STEP', 'STRESS', 'PAI_DAILY', 'WEATHER_CURRENT']) delete data_type[k]
+}
+
+const timers = []
+const timerApi = {
+  createSysTimer: (periodic, period, cb) => {
+    timers.push({ periodic, period, cb })
+    return timers.length
+  },
+  stopTimer: (id) => {
+    timers[id - 1] = null
+  },
+}
+
+const created = []
 
 const deleteWidget = BARE
   ? undefined
@@ -137,6 +158,7 @@ Object.keys(SYSTEM_APPS).forEach((k) => {
 const MODULES = {
   '@zos/ui': { createWidget, deleteWidget, widget, prop, align, text_style, data_type },
   '@zos/sensor': { Time, Battery, Step, HeartRate, Distance, Stand, Calorie, Stress, Pai },
+  '@zos/timer': timerApi,
   '@zos/router': Object.assign(
     { launchApp: (opt) => launched.push(opt) },
     SYSTEM_APPS
@@ -167,6 +189,8 @@ function loadModule(file, resolveImport) {
 
 const layout = loadModule(path.join(ROOT, 'watchface', 'layout.js'), () => '({})')
 
+const problemsLater = []
+
 let face = null
 globalThis.WatchFace = (definition) => {
   face = definition
@@ -191,12 +215,24 @@ face.onInit()
 face.build()
 perMinute.forEach((cb) => cb())
 
+// screen off -> screen on, then one poll tick
+const delegate = created.find((w) => w.type === widget.WIDGET_DELEGATE)
+if (!delegate) {
+  problemsLater.push('no WIDGET_DELEGATE — the face would not refresh on wake')
+} else {
+  delegate.props.pause_call()
+  delegate.props.resume_call()
+}
+timers.filter(Boolean).forEach((t) => t.cb())
+
 // --------------------------------------------------------------- checks ----
 
-const problems = []
+const problems = problemsLater
 
 for (const w of created) {
   const p = w.props
+  // WIDGET_DELEGATE is virtual: lifecycle only, it never draws
+  if (w.type === widget.WIDGET_DELEGATE) continue
   if (p.src) {
     const file = path.join(ASSETS, p.src)
     if (!fs.existsSync(file)) problems.push(`missing asset: ${p.src}`)
@@ -337,10 +373,24 @@ if (markers.length !== 4) {
 } else if (!BARE && created.findIndex(isMarker) < created.length - 4) {
   problems.push('orbital markers are not the last widgets — they would not draw on top')
 }
+// IMG_CLICK paints its src permanently, so a hit area that is not fully
+// transparent shows up as a box drawn over the tile.
+for (const w of created) {
+  if (w.type !== widget.IMG_CLICK || !w.props.src) continue
+  const img = PNG.sync.read(fs.readFileSync(path.join(ASSETS, w.props.src)))
+  let opaque = 0
+  for (let i = 3; i < img.data.length; i += 4) if (img.data[i] > 0) opaque++
+  if (opaque) problems.push(`hit area ${w.props.src} has ${opaque} visible pixels — it would draw over the tile`)
+}
+
 for (const m of markers) {
   if (m.props.w !== m.props.h || !m.props.w) problems.push('marker has no square size')
   if (m.props.w > D.MAX_SPRITE) problems.push(`marker sprite ${m.props.w}px exceeds MAX_SPRITE`)
 }
+
+const live = timers.filter(Boolean)
+if (live.length !== 1) problemsLater.push(`expected exactly 1 poll timer, found ${live.length}`)
+else console.log(`poll timer: every ${live[0].period / 1000}s while awake`)
 
 console.log(`widgets created: ${created.length}`)
 const byType = {}

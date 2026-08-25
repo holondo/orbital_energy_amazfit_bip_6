@@ -25,6 +25,7 @@ import {
   Stress,
   Pai,
 } from '@zos/sensor'
+import { createSysTimer, stopTimer } from '@zos/timer'
 import {
   launchApp,
   SYSTEM_APP_HR,
@@ -52,7 +53,7 @@ import {
   HL_MIN_BOX,
   SLOTS,
   PILL_CELLS,
-  WAVE_STEPS,
+  METER_STEPS,
   AOD,
 } from './layout'
 
@@ -70,10 +71,18 @@ const CAN_DELETE = typeof deleteWidget === 'function'
 const PROP_VISIBLE = prop.VISIBLE
 
 /**
- * IMG_CLICK is the watchface hot zone. It is absent from the @zos/ui typings,
- * so fall back to BUTTON, which is documented and also takes click_func.
+ * IMG_CLICK is the watchface hot zone. It does NOT take a callback: you give it
+ * a `type` from data_type and the firmware jumps to whatever app owns that
+ * metric. Only the date has no matching metric, so it uses a BUTTON whose
+ * click_func routes through @zos/router instead.
+ *
+ * Neither IMG_CLICK nor the watchface-only data_type members are in the
+ * @zos/ui typings, so both are probed before use.
  */
-const CLICK_WIDGET = widget.IMG_CLICK !== undefined ? widget.IMG_CLICK : widget.BUTTON
+const CLICK_WIDGET = widget.IMG_CLICK
+
+/** How often the readings are re-polled while the screen is on. */
+const POLL_MS = 30000
 
 /** Which system app each tile opens when tapped. */
 const APPS = {
@@ -133,20 +142,65 @@ WatchFace({
     this.buildNormal()
     this.buildAod()
     this.buildTapZones()
+    this.buildLifecycle()
 
-    this.refreshTime()
-    this.refreshMetrics()
+    this.refreshAll()
 
-    this.time.onPerMinute(() => {
-      this.refreshTime()
-      this.refreshMetrics()
-    })
+    this.time.onPerMinute(() => this.refreshAll())
 
     // Steps and heart rate move far more often than once a minute.
     this.listen(this.step, 'onChange', 'offChange', () => this.refreshSteps())
     this.listen(this.heartRate, 'onCurrentChange', 'offCurrentChange', () => this.refreshHeartRate())
     this.listen(this.heartRate, 'onLastChange', 'offLastChange', () => this.refreshHeartRate())
     this.listen(this.battery, 'onChange', 'offChange', () => this.refreshBattery())
+  },
+
+  /**
+   * onPerMinute is suspended while the screen is off and does not fire on
+   * wake, which is what left the minute marker stuck a few minutes behind.
+   * WIDGET_DELEGATE is the watchface lifecycle hook: redraw the moment the UI
+   * resumes, then re-poll on a timer for as long as it stays up.
+   */
+  buildLifecycle() {
+    const resume = () => {
+      this.refreshAll()
+      this.startPolling()
+    }
+
+    try {
+      createWidget(widget.WIDGET_DELEGATE, {
+        resume_call: resume,
+        pause_call: () => this.stopPolling(),
+      })
+    } catch (e) {
+      console.log('orbit: no WIDGET_DELEGATE: ' + e)
+    }
+
+    this.startPolling()
+  },
+
+  startPolling() {
+    if (this.timer !== undefined) return
+    try {
+      this.timer = createSysTimer(true, POLL_MS, () => this.refreshAll())
+    } catch (e) {
+      console.log('orbit: cannot start poll timer: ' + e)
+    }
+  },
+
+  stopPolling() {
+    if (this.timer === undefined) return
+    try {
+      stopTimer(this.timer)
+    } catch (e) {
+      console.log('orbit: cannot stop poll timer: ' + e)
+    }
+    this.timer = undefined
+  },
+
+  refreshAll() {
+    this.refreshTime()
+    this.refreshMetrics()
   },
 
   /** Registers a sensor listener and remembers how to tear it down. */
@@ -185,27 +239,13 @@ WatchFace({
     for (let i = 0; i < SLOTS.length; i += 1) {
       const slot = SLOTS[i]
 
-      // The gauge track and the dim wave are baked into the background; these
-      // are the lit overlays that sit on top of them.
-      if (slot.gauge) {
-        this.widgets[slot.key + 'Gauge'] = createWidget(widget.FILL_RECT, {
-          x: slot.gauge.x,
-          y: slot.gauge.y,
-          w: 1,
-          h: slot.gauge.h,
-          radius: slot.gauge.h / 2,
-          color: COLOR.pink,
-          show_level: LV_NORMAL | LV_EDIT,
-        })
-      }
-
-      if (slot.wave) {
-        this.widgets[slot.key + 'Wave'] = createWidget(widget.IMG, {
-          x: slot.wave.x,
-          y: slot.wave.y,
-          w: slot.wave.w,
-          h: slot.wave.h,
-          src: IMAGE.wave(0),
+      if (slot.meter) {
+        this.widgets[slot.key + 'Meter'] = createWidget(widget.IMG, {
+          x: slot.meter.x,
+          y: slot.meter.y,
+          w: slot.meter.w,
+          h: slot.meter.h,
+          src: IMAGE.meter(slot.meter.name, 0),
           show_level: LV_NORMAL | LV_EDIT,
         })
       }
@@ -283,46 +323,72 @@ WatchFace({
    * readings. Tapping one opens the matching system app, the same way the
    * stock watchfaces do.
    */
+  /**
+   * Hot zones over every tile, created before the orbital markers so those
+   * still draw on top.
+   *
+   * A zone whose metric exists in data_type becomes an IMG_CLICK, which is how
+   * the stock watchfaces do it: no callback, the firmware routes the tap to
+   * the app that owns the metric. Anything else (the date) becomes a BUTTON
+   * that calls launchApp itself.
+   */
   buildTapZones() {
     const zones = SLOTS.concat(PILL_CELLS)
-    console.log(
-      'orbit: ' + zones.length + ' tap zones, click widget ' + CLICK_WIDGET +
-      ' (IMG_CLICK=' + widget.IMG_CLICK + '), deleteWidget=' + CAN_DELETE +
-      ', prop.VISIBLE=' + PROP_VISIBLE
-    )
+    let hotzones = 0
+    let buttons = 0
 
     for (let i = 0; i < zones.length; i += 1) {
       const zone = zones[i]
-      const appId = APPS[zone.app]
-      if (appId === undefined) continue
-
-      const open = () => {
-        // logged so a dead zone can be told apart from a failing launch
-        console.log('orbit: tap ' + zone.key + ' -> ' + zone.app)
-        try {
-          launchApp({ appId: appId, native: true })
-        } catch (e) {
-          console.log('orbit: cannot open ' + zone.app + ': ' + e)
-        }
-      }
+      const type = zone.dataType ? data_type[zone.dataType] : undefined
 
       try {
-        createWidget(CLICK_WIDGET, {
+        if (type !== undefined && CLICK_WIDGET !== undefined) {
+          // src is painted permanently, not just while held, so it has to be
+          // the transparent sprite or the tile grows a visible box
+          createWidget(CLICK_WIDGET, {
+            x: zone.tap.x,
+            y: zone.tap.y,
+            w: zone.tap.w,
+            h: zone.tap.h,
+            src: zone.tap.src,
+            type: type,
+            show_level: LV_NORMAL,
+          })
+          hotzones += 1
+          continue
+        }
+
+        const appId = APPS[zone.app]
+        if (appId === undefined) continue
+
+        createWidget(widget.BUTTON, {
           x: zone.tap.x,
           y: zone.tap.y,
           w: zone.tap.w,
           h: zone.tap.h,
-          src: zone.tap.src,
+          text: '',
           normal_src: zone.tap.src,
           press_src: zone.tap.src,
-          text: '',
-          click_func: open,
+          click_func: () => {
+            console.log('orbit: tap ' + zone.key)
+            try {
+              launchApp({ appId: appId, native: true })
+            } catch (e) {
+              console.log('orbit: cannot open ' + zone.app + ': ' + e)
+            }
+          },
           show_level: LV_NORMAL,
         })
+        buttons += 1
       } catch (e) {
         console.log('orbit: cannot arm tap zone ' + zone.key + ': ' + e)
       }
     }
+
+    console.log(
+      'orbit: ' + hotzones + ' IMG_CLICK zones, ' + buttons + ' buttons' +
+      ' (IMG_CLICK=' + widget.IMG_CLICK + ', deleteWidget=' + CAN_DELETE + ')'
+    )
   },
 
   buildAod() {
@@ -424,17 +490,18 @@ WatchFace({
     this.setText('aodDate', stamp)
   },
 
+  /** Swaps a meter's image strip to the frame nearest `ratio` (0..1). */
+  setMeter(key, name, ratio) {
+    const w = this.widgets[key + 'Meter']
+    if (!w) return
+    const step = Math.round(clamp(ratio, 0, 1) * (METER_STEPS - 1))
+    w.setProperty(prop.MORE, { src: IMAGE.meter(name, step) })
+  },
+
   refreshHeartRate() {
     const bpm = this.heartRate.getCurrent() || this.heartRate.getLast() || 0
     this.setText('hr', bpm > 0 ? '' + bpm : '--')
-
-    const track = SLOTS[0].gauge
-    const gauge = this.widgets.hrGauge
-    if (!gauge || !track) return
-
-    const ratio = bpm > 0 ? clamp((bpm - HR_MIN) / (HR_MAX - HR_MIN), 0, 1) : 0
-    const width = Math.round(track.w * ratio)
-    gauge.setProperty(prop.MORE, { w: Math.max(width, ratio > 0 ? track.h : 1) })
+    this.setMeter('hr', 'hr', bpm > 0 ? (bpm - HR_MIN) / (HR_MAX - HR_MIN) : 0)
   },
 
   refreshSteps() {
@@ -444,11 +511,7 @@ WatchFace({
   refreshBattery() {
     const level = clamp(this.battery.getCurrent(), 0, 100)
     this.setText('battery', '' + level)
-
-    const wave = this.widgets.batteryWave
-    if (wave) {
-      wave.setProperty(prop.MORE, { src: IMAGE.wave(Math.round((level / 100) * (WAVE_STEPS - 1))) })
-    }
+    this.setMeter('battery', 'battery', level / 100)
   },
 
   refreshMetrics() {
@@ -467,6 +530,7 @@ WatchFace({
   },
 
   onDestroy() {
+    this.stopPolling()
     if (!this.listeners) return
     for (let i = 0; i < this.listeners.length; i += 1) {
       const l = this.listeners[i]

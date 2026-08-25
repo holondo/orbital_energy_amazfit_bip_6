@@ -18,7 +18,7 @@ export const IMAGE = {
   aod: 'aod.png',
   hourHighlight: (h) => 'hl/h' + (h < 10 ? '0' + h : h) + '.png',
   minuteHighlight: (m) => 'hl/m' + (m < 10 ? '0' + m : m) + '.png',
-  wave: (step) => 'wave/' + (step < 10 ? '0' + step : step) + '.png',
+  meter: (name, step) => 'meter/' + name + '/' + (step < 10 ? '0' + step : step) + '.png',
   aodHourRing: 'hl/aod_h.png',
   aodMinuteRing: 'hl/aod_m.png',
 }
@@ -47,12 +47,12 @@ export const HL_MIN_BOX = 52
  * heart-rate gauge or battery wave, the tap target, and the name of the system
  * app that a tap opens.
  */
-export const SLOTS = [{"key":"hr","app":"HR","tap":{"src":"hit/120x78.png","x":12,"y":28,"w":120,"h":78},"value":{"x":24,"y":64,"w":54,"h":36,"size":31,"color":0xf24bcf},"unit":{"x":78,"y":76,"w":48,"h":24,"size":15,"color":0xffffff,"text":"BPM"},"gauge":{"x":52,"y":39,"w":66,"h":14},"wave":null},{"key":"distance","app":"STATUS","tap":{"src":"hit/120x78.png","x":12,"y":112,"w":120,"h":78},"value":{"x":24,"y":148,"w":64,"h":36,"size":31,"color":0xf24bcf},"unit":{"x":88,"y":160,"w":36,"h":24,"size":15,"color":0x7175ff,"text":"KM"},"gauge":null,"wave":null},{"key":"steps","app":"STATUS","tap":{"src":"hit/120x78.png","x":12,"y":196,"w":120,"h":78},"value":{"x":24,"y":232,"w":96,"h":36,"size":31,"color":0xf24bcf},"unit":null,"gauge":null,"wave":null},{"key":"date","app":"CALENDAR","tap":{"src":"hit/150x68.png","x":12,"y":280,"w":150,"h":68},"value":{"x":24,"y":306,"w":126,"h":36,"size":29,"color":0xf24bcf},"unit":null,"gauge":null,"wave":null},{"key":"battery","app":"SETTING","tap":{"src":"hit/210x68.png","x":170,"y":280,"w":210,"h":68},"value":{"x":182,"y":306,"w":52,"h":36,"size":29,"color":0x0be0f2},"unit":null,"gauge":null,"wave":{"x":234,"y":311,"w":134,"h":26}}]
+export const SLOTS = [{"key":"hr","app":"HR","tap":{"src":"hit/120x78.png","x":12,"y":28,"w":120,"h":78},"value":{"x":24,"y":64,"w":54,"h":36,"size":31,"color":0xf24bcf},"unit":{"x":78,"y":76,"w":48,"h":24,"size":15,"color":0xffffff,"text":"BPM"},"meter":{"name":"hr","x":52,"y":39,"w":66,"h":14},"dataType":"HEART"},{"key":"distance","app":"STATUS","tap":{"src":"hit/120x78.png","x":12,"y":112,"w":120,"h":78},"value":{"x":24,"y":148,"w":64,"h":36,"size":31,"color":0xf24bcf},"unit":{"x":88,"y":160,"w":36,"h":24,"size":15,"color":0x7175ff,"text":"KM"},"meter":null,"dataType":"DISTANCE"},{"key":"steps","app":"STATUS","tap":{"src":"hit/120x78.png","x":12,"y":196,"w":120,"h":78},"value":{"x":24,"y":232,"w":96,"h":36,"size":31,"color":0xf24bcf},"unit":null,"meter":null,"dataType":"STEP"},{"key":"date","app":"CALENDAR","tap":{"src":"hit/150x68.png","x":12,"y":280,"w":150,"h":68},"value":{"x":24,"y":306,"w":126,"h":36,"size":29,"color":0xf24bcf},"unit":null,"meter":null,"dataType":null},{"key":"battery","app":"SETTING","tap":{"src":"hit/210x68.png","x":170,"y":280,"w":210,"h":68},"value":{"x":182,"y":306,"w":52,"h":36,"size":29,"color":0x0be0f2},"unit":null,"meter":{"name":"battery","x":234,"y":311,"w":134,"h":26},"dataType":"BATTERY"}]
 
 /** The four cells inside the bottom pill, same shape as SLOTS. */
-export const PILL_CELLS = [{"key":"temp","app":"WEATHER","tap":{"x":12,"y":356,"w":92,"h":68,"src":"hit/92x68.png"},"value":{"x":12,"y":382,"w":92,"h":36,"size":28}},{"key":"kcal","app":"STATUS","tap":{"x":104,"y":356,"w":92,"h":68,"src":"hit/92x68.png"},"value":{"x":104,"y":382,"w":92,"h":36,"size":28}},{"key":"stress","app":"PRESSURE","tap":{"x":196,"y":356,"w":92,"h":68,"src":"hit/92x68.png"},"value":{"x":196,"y":382,"w":92,"h":36,"size":28}},{"key":"pai","app":"PAI","tap":{"x":288,"y":356,"w":92,"h":68,"src":"hit/92x68.png"},"value":{"x":288,"y":382,"w":92,"h":36,"size":28}}]
+export const PILL_CELLS = [{"key":"temp","app":"WEATHER","dataType":"WEATHER_CURRENT","tap":{"x":12,"y":356,"w":92,"h":68,"src":"hit/92x68.png"},"value":{"x":12,"y":382,"w":92,"h":36,"size":28}},{"key":"kcal","app":"STATUS","dataType":"CAL","tap":{"x":104,"y":356,"w":92,"h":68,"src":"hit/92x68.png"},"value":{"x":104,"y":382,"w":92,"h":36,"size":28}},{"key":"stress","app":"PRESSURE","dataType":"STRESS","tap":{"x":196,"y":356,"w":92,"h":68,"src":"hit/92x68.png"},"value":{"x":196,"y":382,"w":92,"h":36,"size":28}},{"key":"pai","app":"PAI","dataType":"PAI_DAILY","tap":{"x":288,"y":356,"w":92,"h":68,"src":"hit/92x68.png"},"value":{"x":288,"y":382,"w":92,"h":36,"size":28}}]
 
-export const WAVE_STEPS = 21
+export const METER_STEPS = 21
 
 export const AOD = {
   x: 85,

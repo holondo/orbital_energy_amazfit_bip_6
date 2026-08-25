@@ -105,9 +105,10 @@ const SLOTS = [
     box: { x: 12, y: 28, w: 120, h: 78 },
     icon: 'heart',
     iconColor: C.pink,
-    gauge: { dx: 40, dy: 11, w: 66, h: 14 }, // heart-rate zone bar, replaces the label
+    meter: { name: 'hr', dx: 40, dy: 11, w: 66, h: 14 }, // zone bar, replaces the label
     value: { size: 31, color: C.pink, w: 54 },
     unit: { text: 'BPM', color: C.white, size: 15, dx: 66, w: 48 },
+    dataType: 'HEART',
     app: 'HR',
   },
   {
@@ -118,6 +119,7 @@ const SLOTS = [
     label: 'Distance',
     value: { size: 31, color: C.pink, w: 64 },
     unit: { text: 'KM', color: C.blue, size: 15, dx: 76, w: 36 },
+    dataType: 'DISTANCE',
     app: 'STATUS',
   },
   {
@@ -127,6 +129,7 @@ const SLOTS = [
     iconColor: C.sky,
     label: 'Steps',
     value: { size: 31, color: C.pink, w: 96 },
+    dataType: 'STEP',
     app: 'STATUS',
   },
   {
@@ -144,8 +147,9 @@ const SLOTS = [
     icon: 'bolt',
     iconColor: C.cyan,
     label: 'Battery',
-    wave: { dx: 64, dy: 31, w: 134, h: 26 }, // sits beside the reading
+    meter: { name: 'battery', dx: 64, dy: 31, w: 134, h: 26 }, // sits beside the reading
     value: { size: 29, color: C.cyan, w: 52 },
+    dataType: 'BATTERY',
     app: 'SETTING',
   },
 ]
@@ -168,7 +172,12 @@ function checkGeometry() {
   return gap
 }
 
-const BAT = { waveSteps: 21 } // 0%, 5% … 100%
+/**
+ * Both meters are image strips swapped by level rather than resized widgets:
+ * a partial setProperty(MORE, ...) patch does not reliably resize a live
+ * widget on this firmware, but swapping `src` does.
+ */
+const METER_STEPS = 21 // 0%, 5% … 100%
 
 // ---------------------------------------------------------------- pill -----
 const PILL = {
@@ -181,10 +190,10 @@ const PILL = {
   valueSize: 28,
   divInset: 16,
   cells: [
-    { key: 'temp', label: 'Temp', app: 'WEATHER' },
-    { key: 'kcal', label: 'Kcal', app: 'STATUS' },
-    { key: 'stress', label: 'Stress', app: 'PRESSURE' },
-    { key: 'pai', label: 'PAI', app: 'PAI' },
+    { key: 'temp', label: 'Temp', dataType: 'WEATHER_CURRENT', app: 'WEATHER' },
+    { key: 'kcal', label: 'Kcal', dataType: 'CAL', app: 'STATUS' },
+    { key: 'stress', label: 'Stress', dataType: 'STRESS', app: 'PRESSURE' },
+    { key: 'pai', label: 'PAI', dataType: 'PAI_DAILY', app: 'PAI' },
   ],
 }
 
@@ -304,7 +313,7 @@ module.exports = {
   DIAL,
   TILE,
   SLOTS,
-  BAT,
+  METER_STEPS,
   PILL,
   AOD,
   ICONS,

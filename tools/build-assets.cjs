@@ -158,12 +158,13 @@ function tiles() {
       })
     }
 
-    // Only the gauge's track is baked in; the lit part is a runtime widget.
-    if (slot.gauge) {
-      const g = slot.gauge
+    // Meters are drawn entirely by their own image strip at runtime; the
+    // background only carries the unlit track so the tile is never empty.
+    if (slot.meter && slot.meter.name === 'hr') {
+      const m = slot.meter
       out +=
-        `<rect x="${box.x + g.dx}" y="${box.y + g.dy}" width="${g.w}" height="${g.h}" ` +
-        `rx="${g.h / 2}" fill="${D.C.barTrack}"/>`
+        `<rect x="${box.x + m.dx}" y="${box.y + m.dy}" width="${m.w}" height="${m.h}" ` +
+        `rx="${m.h / 2}" fill="${D.C.barTrack}"/>`
     }
   }
 
@@ -172,13 +173,28 @@ function tiles() {
 
 // --------------------------------------------------------------- battery ---
 
+const meterOf = (name) => D.SLOTS.find((s) => s.meter && s.meter.name === name).meter
+
+/** Heart-rate zone bar: a rounded track with the leading `pct` filled. */
+function hrParts(pct) {
+  const { w, h } = meterOf('hr')
+  const r = h / 2
+  const lit = Math.max(Math.round(w * pct), pct > 0 ? h : 0)
+  return {
+    defs: '',
+    body:
+      `<rect x="0" y="0" width="${w}" height="${h}" rx="${r}" fill="${D.C.barTrack}"/>` +
+      (lit > 0 ? `<rect x="0" y="0" width="${lit}" height="${h}" rx="${r}" fill="${D.C.pink}"/>` : ''),
+  }
+}
+
 /**
  * Sine wave with a sparkle badge; the leading `pct` (0..1) of it is lit.
  * Returns SVG fragments so the same drawing can be a standalone frame or be
  * embedded in the preview.
  */
 function waveParts(pct, id) {
-  const { w, h } = D.SLOTS.find((s) => s.wave).wave
+  const { w, h } = meterOf('battery')
   const badge = 13
   const cy = h / 2
   const x1 = w - badge - 3
@@ -208,9 +224,11 @@ function waveParts(pct, id) {
   }
 }
 
-function waveFrame(pct) {
-  const { w, h } = D.SLOTS.find((s) => s.wave).wave
-  const parts = waveParts(pct, 'lit')
+const meterParts = (name, pct, id) => (name === 'hr' ? hrParts(pct) : waveParts(pct, id))
+
+function meterFrame(name, pct) {
+  const { w, h } = meterOf(name)
+  const parts = meterParts(name, pct, 'lit')
   return svgDoc(w, h, parts.body, parts.defs)
 }
 
@@ -268,6 +286,11 @@ function aodRingSprite(box, r) {
  */
 const hitName = (w, h) => `hit/${w}x${h}.png`
 
+/**
+ * Hit areas are fully transparent on purpose. IMG_CLICK paints its `src`
+ * permanently, not only while held, so anything visible here would show up as
+ * a box drawn over the tile.
+ */
 function hitSprite(w, h) {
   return svgDoc(w, h, `<rect width="${w}" height="${h}" fill="none"/>`)
 }
@@ -347,18 +370,15 @@ function previewSvg(sample) {
       })
     }
 
-    if (slot.gauge) {
-      const g = slot.gauge
-      const ratio = Math.max(0, Math.min(1, (Number(value) - 50) / 130))
-      out +=
-        `<rect x="${box.x + g.dx}" y="${box.y + g.dy}" width="${round(g.w * ratio)}" ` +
-        `height="${g.h}" rx="${g.h / 2}" fill="${D.C.pink}"/>`
-    }
-
-    if (slot.wave) {
-      const wave = waveParts(Number(value) / 100, 'plit')
-      defs += wave.defs
-      out += `<g transform="translate(${box.x + slot.wave.dx} ${box.y + slot.wave.dy})">${wave.body}</g>`
+    if (slot.meter) {
+      const m = slot.meter
+      const pct =
+        m.name === 'hr'
+          ? Math.max(0, Math.min(1, (Number(value) - 50) / 130))
+          : Number(value) / 100
+      const parts = meterParts(m.name, pct, 'plit')
+      defs += parts.defs
+      out += `<g transform="translate(${box.x + m.dx} ${box.y + m.dy})">${parts.body}</g>`
     }
   }
 
@@ -436,27 +456,22 @@ function emitLayout() {
           text: slot.unit.text || '',
         }
       : null,
-    gauge: slot.gauge
+    meter: slot.meter
       ? {
-          x: slot.box.x + slot.gauge.dx,
-          y: slot.box.y + slot.gauge.dy,
-          w: slot.gauge.w,
-          h: slot.gauge.h,
+          name: slot.meter.name,
+          x: slot.box.x + slot.meter.dx,
+          y: slot.box.y + slot.meter.dy,
+          w: slot.meter.w,
+          h: slot.meter.h,
         }
       : null,
-    wave: slot.wave
-      ? {
-          x: slot.box.x + slot.wave.dx,
-          y: slot.box.y + slot.wave.dy,
-          w: slot.wave.w,
-          h: slot.wave.h,
-        }
-      : null,
+    dataType: slot.dataType || null,
   }))
 
   const pillCells = D.PILL.cells.map((cell, i) => ({
     key: cell.key,
     app: cell.app,
+    dataType: cell.dataType || null,
     tap: {
       x: Math.round(D.PILL.x + D.cellW * i),
       y: D.PILL.y,
@@ -493,7 +508,7 @@ export const IMAGE = {
   aod: 'aod.png',
   hourHighlight: (h) => 'hl/h' + (h < 10 ? '0' + h : h) + '.png',
   minuteHighlight: (m) => 'hl/m' + (m < 10 ? '0' + m : m) + '.png',
-  wave: (step) => 'wave/' + (step < 10 ? '0' + step : step) + '.png',
+  meter: (name, step) => 'meter/' + name + '/' + (step < 10 ? '0' + step : step) + '.png',
   aodHourRing: 'hl/aod_h.png',
   aodMinuteRing: 'hl/aod_m.png',
 }
@@ -527,7 +542,7 @@ export const SLOTS = ${jsonWithColors(slots)}
 /** The four cells inside the bottom pill, same shape as SLOTS. */
 export const PILL_CELLS = ${jsonWithColors(pillCells)}
 
-export const WAVE_STEPS = ${D.BAT.waveSteps}
+export const METER_STEPS = ${D.METER_STEPS}
 
 export const AOD = {
   x: ${D.AOD.x},
@@ -580,8 +595,11 @@ function main() {
   render(aodRingSprite(D.DIAL.hlHourBox, D.DIAL.hlHourR), 'hl/aod_h.png')
   render(aodRingSprite(D.DIAL.hlMinBox, D.DIAL.hlMinR), 'hl/aod_m.png')
 
-  for (let i = 0; i < D.BAT.waveSteps; i += 1) {
-    render(waveFrame(i / (D.BAT.waveSteps - 1)), `wave/${D.pad2(i)}.png`)
+  for (const slot of D.SLOTS) {
+    if (!slot.meter) continue
+    for (let i = 0; i < D.METER_STEPS; i += 1) {
+      render(meterFrame(slot.meter.name, i / (D.METER_STEPS - 1)), `meter/${slot.meter.name}/${D.pad2(i)}.png`)
+    }
   }
 
   for (let d = 0; d < 10; d += 1) render(tempGlyph(String(d)), `temp/${d}.png`)

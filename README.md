@@ -146,25 +146,58 @@ Não existe `SYSTEM_APP_BATTERY`; as configurações são o mais próximo disso.
 `node tools/simulate.cjs` dispara todas as zonas e lista qual aplicativo cada
 uma abriria.
 
-`IMG_CLICK` é um widget exclusivo de watchface e não aparece nas tipagens do
-`@zos/ui`. O código o procura em `widget.IMG_CLICK` e cai para `widget.BUTTON`
-se não achar — os dois aceitam `click_func`.
+`IMG_CLICK` **não recebe callback.** Ele recebe um `type` vindo de `data_type`,
+e o firmware decide sozinho para onde saltar — é assim que as watchfaces de
+fábrica fazem. Passar `click_func` para ele não dá erro, simplesmente não faz
+nada. Só a data não tem métrica correspondente, então ela usa um `BUTTON` com
+`click_func` chamando o `launchApp` do `@zos/router`.
+
+Nem `IMG_CLICK` nem os `data_type` de watchface (`STEP`, `STRESS`, `PAI_DAILY`,
+`WEATHER_CURRENT`) aparecem nas tipagens do `@zos/ui`, mas existem no aparelho —
+o Bip 6 reporta `IMG_CLICK = 17`. Cada um é checado antes do uso; sem o tipo, a
+zona vira `BUTTON`.
+
+**O `src` do `IMG_CLICK` é desenhado o tempo todo, não só ao pressionar.** A
+documentação diz "imagem exibida ao clicar", o que sugere realce de toque — mas
+na prática ele fica permanente. Por isso os arquivos em `assets/default/hit/`
+são 100% transparentes, e o harness recusa qualquer um que tenha um pixel
+visível: bastaria um para virar uma caixa desenhada por cima do bloco.
 
 **Não existe `hmUI` global neste firmware.** A watchface oficial extraída em
 `reference/` usa `hmUI.*` porque foi compilada com o toolchain antigo, que
 injetava esse objeto; num build atual do Zeus ele simplesmente não está lá, e
-tocar nele derruba a tela inteira. Tudo tem que sair do `@zos/*`. O mesmo vale
-para `deleteWidget` e `prop.VISIBLE`: podem não existir, então são checados
-antes do uso.
+tocar nele derruba a tela inteira. Tudo tem que sair do `@zos/*`.
 
-Ao iniciar, a watchface escreve no console o que encontrou (tipo de widget de
-clique, `deleteWidget`, `prop.VISIBLE`), e cada toque registra
-`orbit: tap <bloco>` — dá para distinguir "zona morta" de "abertura falhou"
-olhando o log:
+Ao iniciar, a watchface escreve no console quantas zonas de cada tipo criou e o
+que encontrou na API. No Bip 6 a linha é:
+
+```
+orbit: 8 IMG_CLICK zones, 1 buttons (IMG_CLICK=17, deleteWidget=true)
+```
+
+Se aparecerem 0 zonas `IMG_CLICK`, os `data_type` sumiram e tudo caiu para
+`BUTTON`. Toques em botões registram `orbit: tap <bloco>`:
 
 ```powershell
 Get-Content "$env:LOCALAPPDATA\Programs\simulator\sim-debug.log" -Tail 40 | Select-String orbit
 ```
+
+## Atualização
+
+Três coisas mantêm os valores em dia, porque nenhuma sozinha basta:
+
+- `time.onPerMinute` — o tique exato no segundo 00.
+- `WIDGET_DELEGATE` com `resume_call` — **essencial**. O `onPerMinute` é
+  suspenso enquanto a tela está apagada e não dispara ao acordar, então sem esse
+  gancho o marcador do minuto fica parado alguns minutos atrás até a próxima
+  virada com a tela ligada.
+- Um `createSysTimer` de 30 s, iniciado no `resume_call` e parado no
+  `pause_call`, que repolla tudo enquanto a tela está acesa.
+
+Os dois medidores — a barra de frequência cardíaca e a onda da bateria — são
+tiras de 21 imagens (`meter/hr/00.png` … `meter/battery/20.png`) trocadas por
+`src`. Redimensionar um widget vivo com um `setProperty(MORE, {w})` parcial não
+funciona de forma confiável neste firmware; trocar `src` funciona.
 
 ## Always-On Display
 
