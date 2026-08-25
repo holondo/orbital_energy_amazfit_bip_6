@@ -14,14 +14,13 @@
  * legacy globals hmSensor/hmSetting do not exist on this device.
  */
 
-import { createWidget, widget, prop, align, text_style, data_type } from '@zos/ui'
+import { createWidget, deleteWidget, widget, prop, align, text_style, data_type } from '@zos/ui'
 import {
   Time,
   Battery,
   Step,
   HeartRate,
   Distance,
-  Stand,
   Calorie,
   Stress,
   Pai,
@@ -57,13 +56,24 @@ import {
   AOD,
 } from './layout'
 
-// Widgets are tagged with the screen states they belong to. The constants live
-// on the global hmUI object on device; the literals are the documented values
-// and act as a fallback so a missing global can never blank the face.
-const SHOW = (typeof hmUI !== 'undefined' && hmUI.show_level) || {}
-const LV_NORMAL = SHOW.ONLY_NORMAL || 0x1
-const LV_AOD = SHOW.ONLY_AOD || 0x2
-const LV_EDIT = SHOW.ONLY_EDIT || 0x4
+// There is no legacy hmUI global on this firmware — everything comes from
+// @zos/ui. A few members the watchface wants are undocumented there, so each is
+// probed and has a fallback.
+//
+// Screen states. hmUI.show_level's documented values; widgets tagged with them
+// appear only in the matching state.
+const LV_NORMAL = 0x1
+const LV_AOD = 0x2
+const LV_EDIT = 0x4
+
+const CAN_DELETE = typeof deleteWidget === 'function'
+const PROP_VISIBLE = prop.VISIBLE
+
+/**
+ * IMG_CLICK is the watchface hot zone. It is absent from the @zos/ui typings,
+ * so fall back to BUTTON, which is documented and also takes click_func.
+ */
+const CLICK_WIDGET = widget.IMG_CLICK !== undefined ? widget.IMG_CLICK : widget.BUTTON
 
 /** Which system app each tile opens when tapped. */
 const APPS = {
@@ -111,7 +121,6 @@ WatchFace({
     this.step = new Step()
     this.heartRate = new HeartRate()
     this.distance = new Distance()
-    this.stand = new Stand()
     this.calorie = new Calorie()
     this.stress = new Stress()
     this.pai = new Pai()
@@ -170,25 +179,6 @@ WatchFace({
       w: SCREEN.w,
       h: SCREEN.h,
       src: IMAGE.bg,
-      show_level: LV_NORMAL | LV_EDIT,
-    })
-
-    // orbital highlights — one sprite each, repositioned every minute
-    this.widgets.hourChip = createWidget(widget.IMG, {
-      x: HOUR_POS[0][0],
-      y: HOUR_POS[0][1],
-      w: HL_HOUR_BOX,
-      h: HL_HOUR_BOX,
-      src: IMAGE.hourHighlight(0),
-      show_level: LV_NORMAL | LV_EDIT,
-    })
-
-    this.widgets.minuteChip = createWidget(widget.IMG, {
-      x: MINUTE_POS[0][0],
-      y: MINUTE_POS[0][1],
-      w: HL_MIN_BOX,
-      h: HL_MIN_BOX,
-      src: IMAGE.minuteHighlight(0),
       show_level: LV_NORMAL | LV_EDIT,
     })
 
@@ -295,6 +285,11 @@ WatchFace({
    */
   buildTapZones() {
     const zones = SLOTS.concat(PILL_CELLS)
+    console.log(
+      'orbit: ' + zones.length + ' tap zones, click widget ' + CLICK_WIDGET +
+      ' (IMG_CLICK=' + widget.IMG_CLICK + '), deleteWidget=' + CAN_DELETE +
+      ', prop.VISIBLE=' + PROP_VISIBLE
+    )
 
     for (let i = 0; i < zones.length; i += 1) {
       const zone = zones[i]
@@ -302,34 +297,30 @@ WatchFace({
       if (appId === undefined) continue
 
       const open = () => {
+        // logged so a dead zone can be told apart from a failing launch
+        console.log('orbit: tap ' + zone.key + ' -> ' + zone.app)
         try {
           launchApp({ appId: appId, native: true })
         } catch (e) {
-          console.log('cannot open ' + zone.app + ': ' + e)
+          console.log('orbit: cannot open ' + zone.app + ': ' + e)
         }
       }
 
-      const options = {
-        x: zone.tap.x,
-        y: zone.tap.y,
-        w: zone.tap.w,
-        h: zone.tap.h,
-        src: zone.tap.src,
-        show_level: LV_NORMAL,
-      }
-
-      // IMG_CLICK is the watchface hot-zone widget; fall back to a plain image
-      // with a release handler on builds that do not expose it.
-      if (widget.IMG_CLICK) {
-        options.click_func = open
-      } else {
-        options.click_up = open
-      }
-
       try {
-        createWidget(widget.IMG_CLICK || widget.IMG, options)
+        createWidget(CLICK_WIDGET, {
+          x: zone.tap.x,
+          y: zone.tap.y,
+          w: zone.tap.w,
+          h: zone.tap.h,
+          src: zone.tap.src,
+          normal_src: zone.tap.src,
+          press_src: zone.tap.src,
+          text: '',
+          click_func: open,
+          show_level: LV_NORMAL,
+        })
       } catch (e) {
-        console.log('cannot arm tap zone ' + zone.key + ': ' + e)
+        console.log('orbit: cannot arm tap zone ' + zone.key + ': ' + e)
       }
     }
   },
@@ -341,24 +332,6 @@ WatchFace({
       w: SCREEN.w,
       h: SCREEN.h,
       src: IMAGE.aod,
-      show_level: LV_AOD,
-    })
-
-    this.widgets.aodHourChip = createWidget(widget.IMG, {
-      x: AOD_HOUR_POS[0][0],
-      y: AOD_HOUR_POS[0][1],
-      w: HL_HOUR_BOX,
-      h: HL_HOUR_BOX,
-      src: IMAGE.aodHourRing,
-      show_level: LV_AOD,
-    })
-
-    this.widgets.aodMinuteChip = createWidget(widget.IMG, {
-      x: AOD_MINUTE_POS[0][0],
-      y: AOD_MINUTE_POS[0][1],
-      w: HL_MIN_BOX,
-      h: HL_MIN_BOX,
-      src: IMAGE.aodMinuteRing,
       show_level: LV_AOD,
     })
 
@@ -392,22 +365,58 @@ WatchFace({
     if (w) w.setProperty(prop.MORE, { text: text })
   },
 
-  moveTo(name, pos, src) {
-    const w = this.widgets[name]
-    if (!w) return
-    const patch = { x: pos[0], y: pos[1] }
-    if (src) patch.src = src
-    w.setProperty(prop.MORE, patch)
+  /**
+   * Places an orbital marker.
+   *
+   * The marker is re-created rather than moved. Nudging a large IMG with
+   * setProperty(MORE, {x, y, src}) came back truncated on device — the hour
+   * marker rendered as only the top-left 48x48 of its sprite — and re-creating
+   * also re-appends the widget at the end of the display list, which is where
+   * these markers belong: above every other element on the face.
+   */
+  placeMarker(name, pos, src, box, level) {
+    const previous = this.widgets[name]
+    const options = {
+      x: pos[0],
+      y: pos[1],
+      w: box,
+      h: box,
+      src: src,
+      show_level: level,
+    }
+
+    if (previous) {
+      if (CAN_DELETE) {
+        deleteWidget(previous)
+      } else {
+        // No deleteWidget here: restate w and h (a partial MORE patch is what
+        // left the sprite truncated) and blink visibility so the old rectangle
+        // is repainted cleanly.
+        if (PROP_VISIBLE !== undefined) previous.setProperty(PROP_VISIBLE, false)
+        previous.setProperty(prop.MORE, options)
+        if (PROP_VISIBLE !== undefined) previous.setProperty(PROP_VISIBLE, true)
+        return
+      }
+    }
+
+    this.widgets[name] = createWidget(widget.IMG, options)
   },
 
   refreshTime() {
     const hour = this.time.getHours()
     const minute = this.time.getMinutes()
 
-    this.moveTo('hourChip', HOUR_POS[hour], IMAGE.hourHighlight(hour))
-    this.moveTo('minuteChip', MINUTE_POS[minute], IMAGE.minuteHighlight(minute))
-    this.moveTo('aodHourChip', AOD_HOUR_POS[hour])
-    this.moveTo('aodMinuteChip', AOD_MINUTE_POS[minute])
+    if (hour !== this.lastHour) {
+      this.lastHour = hour
+      this.placeMarker('hourChip', HOUR_POS[hour], IMAGE.hourHighlight(hour), HL_HOUR_BOX, LV_NORMAL | LV_EDIT)
+      this.placeMarker('aodHourChip', AOD_HOUR_POS[hour], IMAGE.aodHourRing, HL_HOUR_BOX, LV_AOD)
+    }
+
+    if (minute !== this.lastMinute) {
+      this.lastMinute = minute
+      this.placeMarker('minuteChip', MINUTE_POS[minute], IMAGE.minuteHighlight(minute), HL_MIN_BOX, LV_NORMAL | LV_EDIT)
+      this.placeMarker('aodMinuteChip', AOD_MINUTE_POS[minute], IMAGE.aodMinuteRing, HL_MIN_BOX, LV_AOD)
+    }
 
     const stamp = (WEEKDAYS[this.time.getDay()] || '') + ' ' + this.time.getDate()
     this.setText('date', stamp)
@@ -448,9 +457,6 @@ WatchFace({
     this.refreshBattery()
 
     this.setText('distance', formatKm(this.distance.getCurrent()))
-
-    this.setText('stand', '' + this.stand.getCurrent())
-    this.setText('standUnit', '/' + (this.stand.getTarget() || 12))
 
     this.setText('kcal', '' + this.calorie.getCurrent())
 

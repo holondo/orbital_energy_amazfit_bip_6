@@ -10,8 +10,8 @@ marcador iluminado indica a posição atual em cada um. Os dois marcadores cresc
 mostrador para fora da tela.
 
 Os indicadores são blocos: frequência cardíaca, distância e passos à esquerda;
-data, horas em pé e bateria na faixa do meio; temperatura, calorias, estresse e
-PAI na cápsula inferior. Cada bloco é tocável e abre o aplicativo de sistema
+data e bateria na faixa do meio; temperatura, calorias, estresse e PAI na
+cápsula inferior. Cada bloco é tocável e abre o aplicativo de sistema
 correspondente.
 
 ## Comandos
@@ -74,8 +74,17 @@ Como `layout.js` é gerado pelo mesmo script que desenha o fundo, mudar um núme
 em `tools/design.cjs` reposiciona a arte e os widgets ao mesmo tempo. Não existe
 coordenada duplicada entre o desenho e o código.
 
-Os marcadores das órbitas são 84 sprites prontos (`hl/h00.png` … `hl/m59.png`):
-a cada minuto o código só troca `src` e a posição de duas imagens.
+Os marcadores das órbitas são 84 sprites prontos (`hl/h00.png` … `hl/m59.png`).
+Eles são **recriados**, não movidos: mexer num `IMG` grande com
+`setProperty(MORE, {x, y, src})` volta truncado no aparelho — o marcador da hora
+apareceu desenhado só no canto superior esquerdo de 48×48 do sprite de 56×56,
+enquanto o marcador do minuto (52×52), atualizado do mesmo jeito no mesmo
+quadro, ficou perfeito. Recriar também reposiciona o widget no fim da lista de
+desenho, que é onde esses marcadores devem estar: **acima de todo o resto**.
+
+Daí a constante `MAX_SPRITE = 52` em `tools/design.cjs`. `checkGeometry()` roda
+a cada `npm run assets` e quebra o build se um sprite passar disso ou se os dois
+marcadores puderem se sobrepor.
 
 ### Ajustes comuns
 
@@ -95,7 +104,7 @@ Depois de qualquer ajuste, rode `npm run assets`.
 ## Verificação sem o relógio
 
 ```powershell
-node tools/simulate.cjs 18 19 --aod
+node tools/simulate.cjs 14 20 --aod
 ```
 
 Carrega `watchface/index.js` com os módulos `@zos` substituídos por stubs, roda
@@ -110,6 +119,14 @@ Para testar valores extremos:
 $env:SIM='{"steps":98765,"heartRate":0,"battery":3}'; node tools/simulate.cjs 9 7
 ```
 
+`SIM_BARE=1` remove do stub tudo que o `@zos/ui` pode não expor
+(`deleteWidget`, `IMG_CLICK`, `prop.VISIBLE`) e exercita os caminhos
+alternativos:
+
+```powershell
+$env:SIM_BARE='1'; node tools/simulate.cjs 14 20
+```
+
 ## Toque
 
 Cada bloco tem uma zona invisível por cima (`IMG_CLICK` com um PNG transparente
@@ -118,7 +135,7 @@ do tamanho exato do bloco) que chama `launchApp` do `@zos/router`:
 | Bloco | Abre |
 | --- | --- |
 | Freq. cardíaca | `SYSTEM_APP_HR` |
-| Distância, Passos, Stand, Kcal | `SYSTEM_APP_STATUS` |
+| Distância, Passos, Kcal | `SYSTEM_APP_STATUS` |
 | Data | `SYSTEM_APP_CALENDAR` |
 | Bateria | `SYSTEM_APP_SETTING` |
 | Temp | `SYSTEM_APP_WEATHER` |
@@ -128,6 +145,26 @@ do tamanho exato do bloco) que chama `launchApp` do `@zos/router`:
 Não existe `SYSTEM_APP_BATTERY`; as configurações são o mais próximo disso.
 `node tools/simulate.cjs` dispara todas as zonas e lista qual aplicativo cada
 uma abriria.
+
+`IMG_CLICK` é um widget exclusivo de watchface e não aparece nas tipagens do
+`@zos/ui`. O código o procura em `widget.IMG_CLICK` e cai para `widget.BUTTON`
+se não achar — os dois aceitam `click_func`.
+
+**Não existe `hmUI` global neste firmware.** A watchface oficial extraída em
+`reference/` usa `hmUI.*` porque foi compilada com o toolchain antigo, que
+injetava esse objeto; num build atual do Zeus ele simplesmente não está lá, e
+tocar nele derruba a tela inteira. Tudo tem que sair do `@zos/*`. O mesmo vale
+para `deleteWidget` e `prop.VISIBLE`: podem não existir, então são checados
+antes do uso.
+
+Ao iniciar, a watchface escreve no console o que encontrou (tipo de widget de
+clique, `deleteWidget`, `prop.VISIBLE`), e cada toque registra
+`orbit: tap <bloco>` — dá para distinguir "zona morta" de "abertura falhou"
+olhando o log:
+
+```powershell
+Get-Content "$env:LOCALAPPDATA\Programs\simulator\sim-debug.log" -Tail 40 | Select-String orbit
+```
 
 ## Always-On Display
 

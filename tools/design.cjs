@@ -39,14 +39,15 @@ const C = {
 
 // ------------------------------------------------------------------ dial ---
 //
-// Anchored to the top-right corner. Both highlight chips grow *inwards* from
-// their ring towards the empty centre, so they read large without pushing the
-// dial off-screen. The invariant below keeps them from ever touching:
+// Anchored to the top-right corner. Both markers grow *inwards* from their
+// ring towards the empty centre, so they read large without pushing the dial
+// off-screen. The invariant below keeps them from ever touching:
 //
-//   hour chip spans   [rHour + hourOverhang - 2*hlHourR, rHour + hourOverhang]
-//   minute chip spans [rMin + minOverhang - 2*hlMinR,    rMin  + minOverhang]
+//   hour marker spans   [rHour + hourOverhang - 2*hlHourR, rHour + hourOverhang]
+//   minute marker spans [rMin  + minOverhang  - 2*hlMinR,  rMin  + minOverhang]
 //
-// so the hour chip's inner edge must clear the minute chip's outer edge.
+// so the hour marker's inner edge must clear the minute marker's outer edge.
+// checkGeometry() below enforces it at asset-build time.
 const DIAL = {
   cx: 258,
   cy: 148,
@@ -57,15 +58,25 @@ const DIAL = {
   hourFont: 16,
   minFont: 13,
 
-  hourOverhang: 16, // how far past the hour ring the chip reaches
+  hourOverhang: 16, // how far past the hour ring the marker reaches
   minOverhang: 13,
-  hlHourR: 25,
+  hlHourR: 24,
   hlMinR: 23,
-  hlHourBox: 56, // sprite size (chip + glow)
+  hlHourBox: 52, // sprite size (marker + glow); see MAX_SPRITE below
   hlMinBox: 52,
   hlHourFont: 29,
   hlMinFont: 27,
 }
+
+/**
+ * Largest sprite the watch draws reliably.
+ *
+ * A 56x56 marker came back from the device rendered as only its top-left
+ * 48x48; the 52x52 one beside it, updated the same way in the same frame, was
+ * pixel-perfect. Until that is understood, keep every moving sprite at 52 or
+ * below.
+ */
+const MAX_SPRITE = 52
 
 DIAL.hlHourCentre = DIAL.rHour + DIAL.hourOverhang - DIAL.hlHourR
 DIAL.hlMinCentre = DIAL.rMin + DIAL.minOverhang - DIAL.hlMinR
@@ -120,33 +131,42 @@ const SLOTS = [
   },
   {
     key: 'date',
-    box: { x: 12, y: 280, w: 118, h: 68 },
+    box: { x: 12, y: 280, w: 150, h: 68 },
     icon: 'calendar',
     iconColor: C.violet,
     label: 'Date',
-    value: { size: 27, color: C.pink, w: 94 },
+    value: { size: 29, color: C.pink, w: 126 },
     app: 'CALENDAR',
   },
   {
-    key: 'stand',
-    box: { x: 136, y: 280, w: 100, h: 68 },
-    icon: 'stand',
-    iconColor: C.cyan,
-    label: 'Stand',
-    value: { size: 29, color: C.pink, w: 38 },
-    unit: { color: C.cyan, size: 21, dx: 46, w: 46 }, // text comes from the goal
-    app: 'STATUS',
-  },
-  {
     key: 'battery',
-    box: { x: 242, y: 280, w: 138, h: 68 },
+    box: { x: 170, y: 280, w: 210, h: 68 },
     icon: 'bolt',
     iconColor: C.cyan,
-    wave: { dx: 40, dy: 7, w: 86, h: 26 }, // battery wave, replaces the label
-    value: { size: 29, color: C.cyan, w: 60 },
+    label: 'Battery',
+    wave: { dx: 64, dy: 31, w: 134, h: 26 }, // sits beside the reading
+    value: { size: 29, color: C.cyan, w: 52 },
     app: 'SETTING',
   },
 ]
+
+/** Fails the asset build rather than shipping a dial that overlaps itself. */
+function checkGeometry() {
+  const gap =
+    DIAL.rHour + DIAL.hourOverhang - 2 * DIAL.hlHourR - (DIAL.rMin + DIAL.minOverhang)
+  if (gap < 0) {
+    throw new Error(`hour and minute markers overlap by ${-gap}px — shrink hlHourR or spread the rings`)
+  }
+  for (const [name, box] of [['hlHourBox', DIAL.hlHourBox], ['hlMinBox', DIAL.hlMinBox]]) {
+    if (box > MAX_SPRITE) {
+      throw new Error(`${name} is ${box}px; the watch truncates moving sprites above ${MAX_SPRITE}px`)
+    }
+  }
+  if (2 * (DIAL.hlHourR + 2) > DIAL.hlHourBox || 2 * (DIAL.hlMinR + 2) > DIAL.hlMinBox) {
+    throw new Error('a marker plus its glow does not fit inside its sprite box')
+  }
+  return gap
+}
 
 const BAT = { waveSteps: 21 } // 0%, 5% … 100%
 
@@ -288,6 +308,8 @@ module.exports = {
   PILL,
   AOD,
   ICONS,
+  MAX_SPRITE,
+  checkGeometry,
   tileLabelY,
   tileValueY,
   cellW,

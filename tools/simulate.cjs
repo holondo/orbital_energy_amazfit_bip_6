@@ -34,6 +34,7 @@ const prop = { MORE: 'MORE', X: 'X', Y: 'Y', VISIBLE: 'VISIBLE' }
 const widget = {
   IMG: 'IMG',
   IMG_CLICK: 'IMG_CLICK',
+  BUTTON: 'BUTTON',
   TEXT: 'TEXT',
   FILL_RECT: 'FILL_RECT',
   TEXT_IMG: 'TEXT_IMG',
@@ -43,6 +44,23 @@ const widget = {
 const data_type = { WEATHER_CURRENT: 'WEATHER_CURRENT' }
 
 const created = []
+
+// The firmware has no hmUI global — everything the watchface uses comes from
+// @zos/ui. SIM_BARE=1 strips the members that are undocumented there
+// (deleteWidget, IMG_CLICK, prop.VISIBLE) to exercise the fallback paths.
+const BARE = process.env.SIM_BARE === '1'
+if (BARE) {
+  delete widget.IMG_CLICK
+  delete prop.VISIBLE
+}
+
+const deleteWidget = BARE
+  ? undefined
+  : (w) => {
+      const i = created.indexOf(w)
+      if (i >= 0) created.splice(i, 1)
+      return true
+    }
 
 function createWidget(type, options) {
   const w = { type, props: Object.assign({}, options) }
@@ -117,7 +135,7 @@ Object.keys(SYSTEM_APPS).forEach((k) => {
 })
 
 const MODULES = {
-  '@zos/ui': { createWidget, widget, prop, align, text_style, data_type },
+  '@zos/ui': { createWidget, deleteWidget, widget, prop, align, text_style, data_type },
   '@zos/sensor': { Time, Battery, Step, HeartRate, Distance, Stand, Calorie, Stress, Pai },
   '@zos/router': Object.assign(
     { launchApp: (opt) => launched.push(opt) },
@@ -302,7 +320,7 @@ function write(level, file) {
 // ------------------------------------------------------------------ main ---
 
 // Exercise every tap zone and report which system app it would open.
-const zones = created.filter((w) => w.type === widget.IMG_CLICK)
+const zones = created.filter((w) => typeof w.props.click_func === 'function')
 for (const z of zones) {
   if (typeof z.props.click_func === 'function') z.props.click_func()
   else if (typeof z.props.click_up === 'function') z.props.click_up()
@@ -310,6 +328,18 @@ for (const z of zones) {
 }
 if (zones.length && launched.length !== zones.length) {
   problems.push(`${zones.length} tap zones but ${launched.length} launched`)
+}
+
+const isMarker = (w) => String(w.props.src || '').startsWith('hl/')
+const markers = created.filter(isMarker)
+if (markers.length !== 4) {
+  problems.push(`expected 4 orbital markers, found ${markers.length}`)
+} else if (!BARE && created.findIndex(isMarker) < created.length - 4) {
+  problems.push('orbital markers are not the last widgets — they would not draw on top')
+}
+for (const m of markers) {
+  if (m.props.w !== m.props.h || !m.props.w) problems.push('marker has no square size')
+  if (m.props.w > D.MAX_SPRITE) problems.push(`marker sprite ${m.props.w}px exceeds MAX_SPRITE`)
 }
 
 console.log(`widgets created: ${created.length}`)

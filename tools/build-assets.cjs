@@ -158,7 +158,7 @@ function tiles() {
       })
     }
 
-    // The heart-rate gauge takes the label's place; only its track is baked in.
+    // Only the gauge's track is baked in; the lit part is a runtime widget.
     if (slot.gauge) {
       const g = slot.gauge
       out +=
@@ -547,6 +547,8 @@ export const AOD = {
 // ----------------------------------------------------------------- main ----
 
 function main() {
+  const gap = D.checkGeometry()
+  console.log(`  marker clearance: ${gap}px`)
   if (FONT_FILES.length === 0) {
     console.warn('! Segoe UI not found in ' + FONT_DIR + ', falling back to system font matching')
   }
