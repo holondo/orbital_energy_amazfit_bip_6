@@ -108,6 +108,8 @@ const READING = Object.assign(
     paiTotal: 23,
     paiToday: 0, // realistic: nothing earned yet today
     battery: 65,
+    weekday: 2, // 1 = Monday; 3 = WED is the widest weekday
+    dayOfMonth: 30,
   },
   process.env.SIM ? JSON.parse(process.env.SIM) : {}
 )
@@ -117,8 +119,8 @@ const perMinute = []
 class Time {
   getHours() { return HOUR }
   getMinutes() { return MINUTE }
-  getDate() { return 30 }
-  getDay() { return 2 } // Tuesday
+  getDate() { return READING.dayOfMonth }
+  getDay() { return READING.weekday }
   getMonth() { return 8 }
   getFullYear() { return 2026 }
   onPerMinute(cb) { perMinute.push(cb) }

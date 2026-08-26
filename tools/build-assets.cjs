@@ -14,6 +14,7 @@
 const fs = require('fs')
 const path = require('path')
 const { Resvg } = require('@resvg/resvg-js')
+const { PNG } = require('pngjs')
 const D = require('./design.cjs')
 
 const ROOT = path.resolve(__dirname, '..')
@@ -195,9 +196,8 @@ function hrParts(pct) {
  */
 function waveParts(pct, id) {
   const { w, h } = meterOf('battery')
-  const badge = 13
   const cy = h / 2
-  const x1 = w - badge - 3
+  const x1 = w - 2
   const amp = 4.5
   const lambda = 24
 
@@ -207,11 +207,6 @@ function waveParts(pct, id) {
   }
 
   const stroke = 'fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"'
-  const sparkle =
-    `<g transform="translate(${round(w - badge)} ${cy})">` +
-    `<path d="M0 -12 Q1.6 -1.6 12 0 Q1.6 1.6 0 12 Q-1.6 1.6 -12 0 Q-1.6 -1.6 0 -12 Z" fill="${D.C.cyan}"/>` +
-    `<g transform="scale(0.54) translate(-12 -12)" fill="${D.C.bg}">${D.ICONS.bolt}</g>` +
-    '</g>'
 
   return {
     defs:
@@ -219,8 +214,7 @@ function waveParts(pct, id) {
       `width="${round(Math.max(x1 * pct, 0.001))}" height="${h}"/></clipPath>`,
     body:
       `<path d="${d}" ${stroke} stroke="${D.C.cyanDim}"/>` +
-      `<g clip-path="url(#${id})"><path d="${d}" ${stroke} stroke="${D.C.cyan}"/></g>` +
-      sparkle,
+      `<g clip-path="url(#${id})"><path d="${d}" ${stroke} stroke="${D.C.cyan}"/></g>`,
   }
 }
 
@@ -559,11 +553,54 @@ export const AOD = {
   fs.writeFileSync(path.join(ROOT, 'watchface', 'layout.js'), body)
 }
 
+/**
+ * Confirms the marker digits still clear their ring.
+ *
+ * Renders the two-digit pair that reaches furthest from the centre and
+ * measures it, so raising markerFontRatio cannot silently push the numbers
+ * into the ring.
+ */
+function checkMarkerFit(radius, font, label) {
+  const canvas = 260
+  const c = canvas / 2
+  const png = PNG.sync.read(
+    new Resvg(svgDoc(canvas, canvas, text(c, c, '07', { size: font, color: '#ffffff', weight: 700 })), {
+      font: { fontFiles: FONT_FILES, loadSystemFonts: FONT_FILES.length === 0, defaultFontFamily: FAMILY },
+    })
+      .render()
+      .asPng()
+  )
+
+  let reach = 0
+  for (let y = 0; y < canvas; y += 1) {
+    for (let x = 0; x < canvas; x += 1) {
+      if (png.data[((y * canvas + x) << 2) + 3] > 60) {
+        const d = Math.hypot(x + 0.5 - c, y + 0.5 - c)
+        if (d > reach) reach = d
+      }
+    }
+  }
+
+  const usable = radius - 1.25 // half the ring's stroke
+  if (reach > usable) {
+    throw new Error(
+      `${label} digits at size ${font} reach ${reach.toFixed(1)}px, past the ring at ${usable.toFixed(2)}px`
+    )
+  }
+  return usable - reach
+}
+
 // ----------------------------------------------------------------- main ----
 
 function main() {
   const gap = D.checkGeometry()
-  console.log(`  marker clearance: ${gap}px`)
+  const hourFit = checkMarkerFit(D.DIAL.hlHourR, D.DIAL.hlHourFont, 'hour')
+  const minFit = checkMarkerFit(D.DIAL.hlMinR, D.DIAL.hlMinFont, 'minute')
+  console.log(
+    `  marker clearance ${gap}px; digits clear the ring by ` +
+    `${hourFit.toFixed(1)}px (hour, size ${D.DIAL.hlHourFont}) and ` +
+    `${minFit.toFixed(1)}px (minute, size ${D.DIAL.hlMinFont})`
+  )
   if (FONT_FILES.length === 0) {
     console.warn('! Segoe UI not found in ' + FONT_DIR + ', falling back to system font matching')
   }

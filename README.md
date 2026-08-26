@@ -13,12 +13,23 @@ disco ele pode encostar na borda de cima e na da direita por mais arredondado
 que seja o canto do display: erodir um retângulo arredondado por um raio maior
 que o do canto deixa um retângulo reto. Quem limita, então, são só os blocos
 (terminam em `x=112`) e a faixa do meio (começa em `y=280`) — e o lado
-horizontal aperta primeiro, em 136 px de alcance. Daí para dentro cabem 74 px
+horizontal aperta primeiro, em 136 px de alcance. Daí para dentro cabem 80 px
 de diâmetro na hora e 56 px no minuto, encostando um no outro sem se sobrepor.
 
-Para dar mais mostrador, o caminho é estreitar a coluna da esquerda: cada pixel
-que sai dela vira meio pixel de raio. Encolher a cápsula de baixo não ajuda
-enquanto o lado horizontal for o que aperta.
+A **soma** dos dois raios é que está presa: como um marcador vai de
+`O - 2·Rh` até `O` e o outro de `minOuter - 2·Rm` até `minOuter`, não se
+sobrepor exige `Rh + Rm ≤ (O - buraco central) / 2`. Hoje isso está no limite,
+com o buraco central em zero — o marcador do minuto encosta exatamente no
+centro do mostrador. Então crescer um dos dois custa de um destes três lugares:
+
+| Lever | Câmbio |
+| --- | --- |
+| Estreitar a coluna da esquerda | 2 px de bloco → 1 px de alcance → 1 px de diâmetro |
+| Encolher o anel dos minutos | 1 px de `rMin` → 1 px de diâmetro na hora, 1 px a menos no minuto |
+| Encolher o marcador do minuto | troca direta, 1 por 1 |
+
+Encolher a cápsula de baixo não ajuda enquanto o lado horizontal for o que
+aperta.
 
 Os indicadores são blocos: frequência cardíaca, distância e passos à esquerda;
 data e bateria na faixa do meio; temperatura, calorias, estresse e PAI na
@@ -68,6 +79,8 @@ tocando sete vezes no ícone do Zepp.
 | `tools/build-assets.cjs` | Desenha os SVGs, rasteriza para PNG e emite `layout.js`. |
 | `tools/simulate.cjs` | Executa a watchface fora do relógio, confere as zonas de toque e rasteriza o resultado. |
 | `tools/zoom.cjs` | Recorta e amplia um PNG para conferir detalhes. |
+| `tools/measure-text.cjs` | Mede a tinta de um texto num print do aparelho, para dimensionar as caixas pela fonte real do relógio. |
+| `tools/diff-device.cjs` | Compõe o esperado e compara com um print do aparelho, marcando as diferenças. |
 | `assets/default/` | **Gerado.** Não editar à mão — `npm run assets` sobrescreve tudo. |
 
 `tools/` só roda no computador; os arquivos usam extensão `.cjs` justamente para
@@ -120,6 +133,20 @@ um sprite passar disso ou se os dois marcadores puderem se sobrepor.
   entrada define a caixa do bloco, o ícone, o tamanho do valor e o campo `app`,
   que é o aplicativo de sistema que um toque abre.
 - **Dias da semana em português:** array `WEEKDAYS` em `watchface/index.js`.
+- **Tamanho dos números dos marcadores:** `markerFontRatio` em `tools/design.cjs`
+  — a fonte é uma fração do diâmetro do círculo, então acompanha o marcador.
+  Está em 0.72, que é o limite: `checkMarkerFit()` desenha o par de dígitos que
+  chega mais longe do centro (`07`) e quebra o build se ele encostar no anel.
+
+> Um estilo sem anel — disco liso na cor dos blocos e o número transbordando
+> para os lados — foi testado e revertido. Sem contorno, os dois marcadores
+> leem como um número de quatro dígitos sempre que se alinham; às 06:15, `15` e
+> `06` viram `1506`. O anel é o que separa os dois.
+
+> `text_style.NONE` é o **letreiro rolante** (跑马灯), não "sem tratamento".
+> Qualquer texto tão largo quanto a caixa fica rolando para sempre. Os valores
+> usam `ELLIPSIS`, e as caixas são dimensionadas com medições feitas na fonte
+> real do relógio via `tools/measure-text.cjs`.
 
 Depois de qualquer ajuste, rode `npm run assets`.
 

@@ -131,7 +131,7 @@ check with `tasklist | grep qemu`.
 
 ## 3. Firmware behaviour you cannot get from the docs
 
-These four cost the most time. Design around them from the start.
+These five cost the most time. Design around them from the start.
 
 ### 3.1 Updates that land while the screen is off are not drawn
 
@@ -162,7 +162,21 @@ this.timer = createSysTimer(true, 30000, () => this.refreshAll())
 Three mechanisms together, because none alone is sufficient: `onPerMinute` for
 the exact tick, `resume_call` for wake, the timer for everything in between.
 
-### 3.2 Partial `setProperty(prop.MORE, {...})` patches are unreliable
+### 3.2 `text_style.NONE` means "keep scrolling"
+
+It reads like "no processing", so it is the natural default to reach for. It is
+the **marquee**: any `TEXT` whose content is as wide as its box scrolls
+forever. A date that measures 82 px in an 82 px box animates permanently.
+
+Use `text_style.ELLIPSIS` for readings. It holds still and trims only if the
+text genuinely overruns.
+
+Size the boxes from the device's own font, not from the one your generator
+draws with. Screenshot the face, then measure the ink extents of each string
+inside its known box (`tools/measure-text.cjs` here) and give every box a few
+pixels of slack over its worst realistic content.
+
+### 3.3 Partial `setProperty(prop.MORE, {...})` patches are unreliable
 
 Patching a subset of a live widget's options does not reliably apply. Observed:
 a `FILL_RECT` never changed width, and a moved `IMG` came back drawn as only
@@ -199,7 +213,7 @@ w.setProperty(prop.MORE, { src: 'meter/hr/' + pad2(step) + '.png' })
 
 Text updates via `setProperty(prop.MORE, { text })` are fine.
 
-### 3.3 There is no sprite size limit — do not invent one
+### 3.4 There is no sprite size limit — do not invent one
 
 A 56x56 sprite once rendered as its top-left 48x48 while a 52x52 one beside it
 was perfect. That looks exactly like a size cap. **It is not.** `bg.png` is
@@ -208,7 +222,7 @@ updated: the hour had changed with the screen off, the minute seconds earlier
 with it on. It is symptom 3.1 wearing a disguise. Fix the lifecycle, and size
 is free again.
 
-### 3.4 Z-order is creation order
+### 3.5 Z-order is creation order
 
 The background image must be created first; anything that must sit on top must
 be created last. Because markers are re-created on every change, they naturally
@@ -549,6 +563,16 @@ others, and find the handle by enumerating windows for the title
 - Body text 15 px, values 27–31 px, hero numbers 32–36 px.
 - Verify against 00:00 and 12:30 when two rotating elements can align — that is
   when overlapping elements collide.
+- To size text inside a circle, do not use the corner of its bounding box —
+  round glyphs leave those corners empty. Render the candidate strings and
+  measure the furthest lit pixel from the centre. Across all 100 two-digit
+  pairs the one that reaches furthest is `07`, and the exact test buys about
+  10% more type than the bounding-box estimate allows.
+- Two rotating markers that carry numbers must be checked at the angle where
+  they **align**, not just at a typical time. Once the outlines around them go
+  away, adjacent digits read as one long number — `15` and `06` at 06:15
+  becomes `1506`. Budget a real ink gap between them, not just
+  non-overlapping bounding boxes.
 - A round dial is bounded by whatever crowds it on **all four** sides, and it
   grows by twice what you free up on the tightest one. Work out the reach
   first (`min(edge - neighbour)` horizontally and vertically), then derive the
@@ -579,6 +603,7 @@ others, and find the handle by enumerating windows for the title
 | `cannot read property 'widget' of null` | dereferencing the absent `hmUI` global, usually via a bad `&&` guard |
 | Build dies on `PARSE_ERROR` in a `.node` file | Rollup picked up a build script; rename it `.cjs` |
 | Values freeze / skip while the screen is off | no `WIDGET_DELEGATE` `resume_call` |
+| A reading scrolls sideways forever | `text_style.NONE` is the marquee; use `ELLIPSIS` and widen the box |
 | A moved sprite is drawn partially | partial `MORE` patch and/or an update while the screen was off; re-create the widget |
 | A bar never resizes | `MORE` cannot resize reliably; use a frame strip and swap `src` |
 | Taps do nothing | `IMG_CLICK` given `click_func` instead of `type` |

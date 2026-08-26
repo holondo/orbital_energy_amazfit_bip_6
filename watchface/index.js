@@ -218,7 +218,9 @@ WatchFace({
         color: COLOR.pink,
         align_h: align.LEFT,
         align_v: align.CENTER_V,
-        text_style: text_style.NONE,
+        // NONE is the marquee style — overflowing text scrolls forever.
+        // ELLIPSIS keeps it still and only trims if it ever really overruns.
+        text_style: text_style.ELLIPSIS,
         text: '',
         show_level: LV_NORMAL | LV_EDIT,
       },

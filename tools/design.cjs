@@ -52,11 +52,11 @@ const DIAL = {
   cx: 252,
   cy: 140,
   rHour: 119, // radius of the 24 hour markers
-  rMin: 49, // radius of the 12 minute markers
+  rMin: 43, // radius of the 12 minute markers
   hourChipR: 13.5, // faint disc behind each hour number
-  minChipR: 11.5,
+  minChipR: 11,
   hourFont: 16,
-  minFont: 13,
+  minFont: 12,
 
   // The dial's footprint is a disc of radius rHour + hourOverhang, so it can sit
   // tangent to the top and right edges however round the display corners are:
@@ -65,12 +65,19 @@ const DIAL = {
   // y=280 actually constrain it, and the horizontal side binds first at 136.
   hourOverhang: 17, // how far past the hour ring the marker reaches
   minOverhang: 13,
-  hlHourR: 37,
+  hlHourR: 40,
   hlMinR: 28,
-  hlHourBox: 78, // sprite size (marker + glow)
+  hlHourBox: 84, // sprite size (marker + glow)
   hlMinBox: 60,
-  hlHourFont: 40,
-  hlMinFont: 32,
+  // Marker digits as a fraction of the circle's diameter. Measured against all
+  // 100 two-digit pairs, "07" is the one that reaches furthest; at 0.72 it
+  // still clears the ring by 2px. checkMarkerFit() in the generator re-tests
+  // this on every build.
+  //
+  // A flat disc with the number overflowing it — no ring — was tried and
+  // reverted: without an outline the two markers read as one four-digit number
+  // whenever they align, as at 06:15.
+  markerFontRatio: 0.72,
 }
 
 /**
@@ -85,10 +92,12 @@ const DIAL = {
  * fault that made the minute appear to freeze. WIDGET_DELEGATE's resume_call
  * now redraws everything on wake, so the size is free again.
  */
-const MAX_SPRITE = 80
+const MAX_SPRITE = 88
 
 DIAL.hlHourCentre = DIAL.rHour + DIAL.hourOverhang - DIAL.hlHourR
 DIAL.hlMinCentre = DIAL.rMin + DIAL.minOverhang - DIAL.hlMinR
+DIAL.hlHourFont = Math.round(2 * DIAL.hlHourR * DIAL.markerFontRatio)
+DIAL.hlMinFont = Math.round(2 * DIAL.hlMinR * DIAL.markerFontRatio)
 
 // ---------------------------------------------------------------- tiles ----
 const TILE = {
@@ -115,8 +124,8 @@ const SLOTS = [
     icon: 'heart',
     iconColor: C.pink,
     meter: { name: 'hr', dx: 32, dy: 11, w: 59, h: 14 }, // zone bar, replaces the label
-    value: { size: 28, color: C.pink, w: 48 },
-    unit: { text: 'BPM', color: C.white, size: 13, dx: 58, w: 34 },
+    value: { size: 28, color: C.pink, w: 50 },
+    unit: { text: 'BPM', color: C.white, size: 13, dx: 60, w: 38 },
     dataType: 'HEART',
     app: 'HR',
   },
@@ -126,8 +135,8 @@ const SLOTS = [
     icon: 'pin',
     iconColor: C.blue,
     label: 'Distance',
-    value: { size: 28, color: C.pink, w: 56 },
-    unit: { text: 'KM', color: C.blue, size: 13, dx: 66, w: 26 },
+    value: { size: 28, color: C.pink, w: 57 },
+    unit: { text: 'KM', color: C.blue, size: 13, dx: 67, w: 32 },
     dataType: 'DISTANCE',
     app: 'STATUS',
   },
@@ -148,7 +157,10 @@ const SLOTS = [
     icon: 'calendar',
     iconColor: C.violet,
     label: 'Date',
-    value: { size: 24, color: C.pink, w: 82 },
+    // 'WED 26' measures 82px on the device at size 24 — exactly the content
+    // width, which is what set the marquee off. One size down plus a box that
+    // runs past the nominal padding gives it real slack.
+    value: { size: 23, color: C.pink, w: 88 },
     app: 'CALENDAR',
   },
   {
