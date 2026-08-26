@@ -82,6 +82,7 @@ tocando sete vezes no ícone do Zepp.
 | `tools/measure-text.cjs` | Mede a tinta de um texto num print do aparelho, para dimensionar as caixas pela fonte real do relógio. |
 | `tools/diff-device.cjs` | Compõe o esperado e compara com um print do aparelho, marcando as diferenças. |
 | `tools/fonts/` | Fonte vendorizada para os marcadores (Instrument Serif, SIL OFL) e sua licença. |
+| `assets/default/t1…t4/` | **Gerado.** Um conjunto de assets por tema. |
 | `assets/default/` | **Gerado.** Não editar à mão — `npm run assets` sobrescreve tudo. |
 
 `tools/` só roda no computador; os arquivos usam extensão `.cjs` justamente para
@@ -124,7 +125,9 @@ um sprite passar disso ou se os dois marcadores puderem se sobrepor.
 
 ### Ajustes comuns
 
-- **Cores:** `C` em `tools/design.cjs`.
+- **Cores:** a tabela `THEMES` em `tools/design.cjs`. Cada tema define os 21
+  papéis de `ROLES` — `checkThemes()` quebra o build se faltar um ou se algum
+  inventar um papel que não existe.
 - **Proporção dos anéis:** `DIAL` em `tools/design.cjs`. Como os marcadores
   crescem para dentro, a folga entre eles é
   `rHour + hourOverhang - 2*hlHourR - (rMin + minOverhang)`; mantenha esse valor
@@ -164,6 +167,32 @@ um sprite passar disso ou se os dois marcadores puderem se sobrepor.
 > real do relógio via `tools/measure-text.cjs`.
 
 Depois de qualquer ajuste, rode `npm run assets`.
+
+## Temas
+
+Quatro temas, atrás do ícone de lápis na lista de watchfaces do relógio:
+**Aurora** (o original), **Sand**, **Graphite** e **Blossom** — os três últimos
+amostrados das watchfaces Expressive Energy de fábrica. Todos seguem o mesmo
+padrão: um tom dominante para as leituras, um acento **de propósito
+contrastante** para a bateria, e uma superfície escura tingida na direção do
+tom dominante.
+
+Cores nunca são referenciadas por matiz, e sim por **papel**: um bloco pede
+`primary`, e o tema decide se isso é magenta ou tan. Os anéis não são listas de
+cor — eles varrem matiz com a posição, então cada tema fornece a varredura
+(`ring` e `minRing`) em vez de 36 valores fixos.
+
+O `WATCHFACE_EDIT_BG` troca **apenas o fundo**. Marcadores, medidores, dígitos
+de temperatura e toda cor de texto são escolhidos pelo código a partir do id
+que o widget devolve em `prop.CURRENT_TYPE` — por isso os assets ficam numa
+pasta por tema (`t1/` … `t4/`), com o que não tem cor (AOD, áreas de toque)
+fora delas. São 141 arquivos por tema, 572 no total.
+
+Para renderizar um tema fora do relógio:
+
+```powershell
+$env:SIM_THEME='3'; node tools/simulate.cjs 14 20
+```
 
 ## Verificação sem o relógio
 

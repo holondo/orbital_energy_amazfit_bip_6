@@ -5,31 +5,41 @@
 
 export const SCREEN = { w: 390, h: 450 }
 
-export const COLOR = {
-  bg: 0x000000,
-  pink: 0xf24bcf,
-  cyan: 0x0be0f2,
-  white: 0xffffff,
-  aodText: 0xc8c8d8,
-}
+/**
+ * One entry per theme. Its color map is keyed by role, so a slot that asks
+ * for 'primary' gets whatever this theme calls primary.
+ */
+export const THEMES = [{"id":1,"key":"t1","name":"Aurora","color":{"bg":0x000000,"primary":0xf24bcf,"marker":0xee4cc4,"markerFill":0x16091a,"accent":0x0be0f2,"accentDim":0x0d4c56,"iconDistance":0x7175ff,"iconSteps":0x55b1ff,"iconDate":0x8483f5,"white":0xffffff,"label":0xefecf7,"chip":0x0d0c1c,"tileBg":0x0a0a2c,"tileEdge":0x1c1c58,"pillBg":0x0c0c3f,"pillEdge":0x22236f,"pillDiv":0x383993,"barTrack":0x1b1966,"aodDim":0x5a5a6e,"aodFaint":0x33333f,"aodText":0xc8c8d8}},{"id":2,"key":"t2","name":"Sand","color":{"bg":0x000000,"primary":0xd2a483,"marker":0xc98f63,"markerFill":0x1c120a,"accent":0x32bfcb,"accentDim":0x0f3a3e,"iconDistance":0xc3a184,"iconSteps":0xe0bb96,"iconDate":0xb08a6d,"white":0xfff6ec,"label":0xfad9c1,"chip":0x191310,"tileBg":0x241a15,"tileEdge":0x4a382c,"pillBg":0x382d2c,"pillEdge":0x5c4740,"pillDiv":0x7d6154,"barTrack":0x4a382c,"aodDim":0x5a5a6e,"aodFaint":0x33333f,"aodText":0xc8c8d8}},{"id":3,"key":"t3","name":"Graphite","color":{"bg":0x000000,"primary":0xe8e8ea,"marker":0xc8c8cc,"markerFill":0x17171a,"accent":0x54bb54,"accentDim":0x173a17,"iconDistance":0xa9a8a8,"iconSteps":0xc9c9cb,"iconDate":0x8f8f92,"white":0xffffff,"label":0xf6f8f8,"chip":0x151516,"tileBg":0x1c1c1e,"tileEdge":0x3a3a3d,"pillBg":0x353535,"pillEdge":0x555558,"pillDiv":0x77777a,"barTrack":0x3a3a3d,"aodDim":0x5a5a6e,"aodFaint":0x33333f,"aodText":0xc8c8d8}},{"id":4,"key":"t4","name":"Blossom","color":{"bg":0x000000,"primary":0xef558a,"marker":0xe8467f,"markerFill":0x1e0a16,"accent":0x41dbac,"accentDim":0x123b30,"iconDistance":0xc86ab8,"iconSteps":0xef8bb0,"iconDate":0xb45fa0,"white":0xffffff,"label":0xf5c5d7,"chip":0x1a0f18,"tileBg":0x2a1130,"tileEdge":0x54265f,"pillBg":0x431c55,"pillEdge":0x6b3080,"pillDiv":0x8f4aa8,"barTrack":0x54265f,"aodDim":0x5a5a6e,"aodFaint":0x33333f,"aodText":0xc8c8d8}}]
 
+const pad = (n) => (n < 10 ? '0' + n : '' + n)
+
+/**
+ * Theme-scoped paths take the theme key; the rest are shared.
+ *
+ * The two the editor consumes live flat at the assets root rather than inside
+ * the theme folder — that is how the stock faces name them
+ * (background_theme1.png), and WATCHFACE_EDIT_BG drew nothing when they were
+ * given as a subfolder path.
+ */
 export const IMAGE = {
-  bg: 'bg.png',
+  bg: (t) => 'bg_' + t + '.png',
+  preview: (t) => 'preview_' + t + '.png',
+  hourHighlight: (t, h) => t + '/hl/h' + pad(h) + '.png',
+  minuteHighlight: (t, m) => t + '/hl/m' + pad(m) + '.png',
+  meter: (t, name, step) => t + '/meter/' + name + '/' + pad(step) + '.png',
+  tempGlyph: (t, ch) => t + '/temp/' + ch + '.png',
   aod: 'aod.png',
-  hourHighlight: (h) => 'hl/h' + (h < 10 ? '0' + h : h) + '.png',
-  minuteHighlight: (m) => 'hl/m' + (m < 10 ? '0' + m : m) + '.png',
-  meter: (name, step) => 'meter/' + name + '/' + (step < 10 ? '0' + step : step) + '.png',
   aodHourRing: 'hl/aod_h.png',
   aodMinuteRing: 'hl/aod_m.png',
+  editorFg: 'edit_fg.png',
+  editorTips: 'edit_tips.png',
 }
 
-export const TEMP_FONT = [
-  'temp/0.png', 'temp/1.png', 'temp/2.png', 'temp/3.png', 'temp/4.png',
-  'temp/5.png', 'temp/6.png', 'temp/7.png', 'temp/8.png', 'temp/9.png',
-]
-export const TEMP_DEGREE = 'temp/deg.png'
-export const TEMP_NEGATIVE = 'temp/neg.png'
-export const TEMP_INVALID = 'temp/dash.png'
+export const TEMP_FONT = (t) =>
+  ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => IMAGE.tempGlyph(t, d))
+export const TEMP_DEGREE = (t) => IMAGE.tempGlyph(t, 'deg')
+export const TEMP_NEGATIVE = (t) => IMAGE.tempGlyph(t, 'neg')
+export const TEMP_INVALID = (t) => IMAGE.tempGlyph(t, 'dash')
 
 /** Top-left corner of the 84x84 hour chip, per hour. */
 export const HOUR_POS = [[210,2],[235,5],[258,15],[278,30],[293,50],[303,73],[306,98],[303,123],[293,146],[278,166],[258,181],[235,191],[210,194],[185,191],[162,181],[142,166],[127,146],[117,123],[114,98],[117,73],[127,50],[142,30],[162,15],[185,5]]
@@ -47,7 +57,7 @@ export const HL_MIN_BOX = 60
  * heart-rate gauge or battery wave, the tap target, and the name of the system
  * app that a tap opens.
  */
-export const SLOTS = [{"key":"hr","app":"HR","tap":{"src":"hit/100x78.png","x":12,"y":28,"w":100,"h":78},"value":{"x":21,"y":64,"w":50,"h":36,"size":28,"color":0xf24bcf},"unit":{"x":72,"y":76,"w":38,"h":24,"size":13,"color":0xffffff,"text":"BPM"},"meter":{"name":"hr","x":44,"y":39,"w":59,"h":14},"dataType":"HEART"},{"key":"distance","app":"STATUS","tap":{"src":"hit/100x78.png","x":12,"y":112,"w":100,"h":78},"value":{"x":21,"y":148,"w":57,"h":36,"size":28,"color":0xf24bcf},"unit":{"x":79,"y":160,"w":32,"h":24,"size":13,"color":0x7175ff,"text":"KM"},"meter":null,"dataType":"DISTANCE"},{"key":"steps","app":"STATUS","tap":{"src":"hit/100x78.png","x":12,"y":196,"w":100,"h":78},"value":{"x":21,"y":232,"w":82,"h":36,"size":28,"color":0xf24bcf},"unit":null,"meter":null,"dataType":"STEP"},{"key":"date","app":"CALENDAR","tap":{"src":"hit/100x68.png","x":12,"y":280,"w":100,"h":68},"value":{"x":21,"y":306,"w":88,"h":36,"size":23,"color":0xf24bcf},"unit":null,"meter":null,"dataType":null},{"key":"battery","app":"SETTING","tap":{"src":"hit/262x68.png","x":118,"y":280,"w":262,"h":68},"value":{"x":127,"y":306,"w":50,"h":36,"size":28,"color":0x0be0f2},"unit":null,"meter":{"name":"battery","x":180,"y":311,"w":191,"h":26},"dataType":"BATTERY"}]
+export const SLOTS = [{"key":"hr","app":"HR","tap":{"src":"hit/100x78.png","x":12,"y":28,"w":100,"h":78},"value":{"x":21,"y":64,"w":50,"h":36,"size":28,"color":"primary"},"unit":{"x":72,"y":76,"w":38,"h":24,"size":13,"color":"white","text":"BPM"},"meter":{"name":"hr","x":44,"y":39,"w":59,"h":14},"dataType":"HEART"},{"key":"distance","app":"STATUS","tap":{"src":"hit/100x78.png","x":12,"y":112,"w":100,"h":78},"value":{"x":21,"y":148,"w":57,"h":36,"size":28,"color":"primary"},"unit":{"x":79,"y":160,"w":32,"h":24,"size":13,"color":"iconDistance","text":"KM"},"meter":null,"dataType":"DISTANCE"},{"key":"steps","app":"STATUS","tap":{"src":"hit/100x78.png","x":12,"y":196,"w":100,"h":78},"value":{"x":21,"y":232,"w":82,"h":36,"size":28,"color":"primary"},"unit":null,"meter":null,"dataType":"STEP"},{"key":"date","app":"CALENDAR","tap":{"src":"hit/100x68.png","x":12,"y":280,"w":100,"h":68},"value":{"x":21,"y":306,"w":88,"h":36,"size":23,"color":"primary"},"unit":null,"meter":null,"dataType":null},{"key":"battery","app":"SETTING","tap":{"src":"hit/262x68.png","x":118,"y":280,"w":262,"h":68},"value":{"x":127,"y":306,"w":50,"h":36,"size":28,"color":"accent"},"unit":null,"meter":{"name":"battery","x":180,"y":311,"w":191,"h":26},"dataType":"BATTERY"}]
 
 /** The four cells inside the bottom pill, same shape as SLOTS. */
 export const PILL_CELLS = [{"key":"temp","app":"WEATHER","dataType":"WEATHER_CURRENT","tap":{"x":12,"y":356,"w":92,"h":68,"src":"hit/92x68.png"},"value":{"x":12,"y":382,"w":92,"h":36,"size":28}},{"key":"kcal","app":"STATUS","dataType":"CAL","tap":{"x":104,"y":356,"w":92,"h":68,"src":"hit/92x68.png"},"value":{"x":104,"y":382,"w":92,"h":36,"size":28}},{"key":"stress","app":"PRESSURE","dataType":"STRESS","tap":{"x":196,"y":356,"w":92,"h":68,"src":"hit/92x68.png"},"value":{"x":196,"y":382,"w":92,"h":36,"size":28}},{"key":"pai","app":"PAI","dataType":"PAI_DAILY","tap":{"x":288,"y":356,"w":92,"h":68,"src":"hit/92x68.png"},"value":{"x":288,"y":382,"w":92,"h":36,"size":28}}]

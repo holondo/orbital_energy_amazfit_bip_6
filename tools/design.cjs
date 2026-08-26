@@ -13,29 +13,187 @@ const W = 390
 const H = 450
 
 // ---------------------------------------------------------------- palette --
-// Values sampled from reference/target-mockup.png (see tools/sample-colors.cjs).
-const C = {
-  bg: '#000000',
-  pink: '#f24bcf',
-  magenta: '#ee4cc4',
-  cyan: '#0be0f2',
-  cyanDim: '#0d4c56',
-  blue: '#7175ff',
-  sky: '#55b1ff',
-  violet: '#8483f5',
-  white: '#ffffff',
-  label: '#efecf7',
-  chip: '#0d0c1c',
-  tileBg: '#0a0a2c',
-  tileEdge: '#1c1c58',
-  pillBg: '#0c0c3f',
-  pillEdge: '#22236f',
-  pillDiv: '#383993',
-  barTrack: '#1b1966',
-  aodDim: '#5a5a6e',
-  aodFaint: '#33333f',
-  aodText: '#c8c8d8',
+//
+// Colours are referenced by ROLE, never by hue: a slot asks for `primary`, and
+// the active theme decides whether that is magenta or tan. Every theme must
+// define every role.
+//
+// Theme 1 (aurora) is the original palette, sampled from
+// reference/target-mockup.png. The rest are drawn from the stock Expressive
+// Energy themes, which all follow one pattern: a dominant hue for the
+// readings, a deliberately *contrasting* accent for the battery, and a dark
+// surface tinted towards the dominant hue.
+const ROLES = [
+  'bg',
+  'primary', // the readings
+  'marker', // the orbital marker rings
+  'markerFill', // the marker's dark interior
+  'accent', // battery — a contrasting hue on purpose
+  'accentDim', // the unlit part of the battery wave
+  'iconDistance',
+  'iconSteps',
+  'iconDate',
+  'white',
+  'label',
+  'chip', // the disc behind each ring number
+  'tileBg',
+  'tileEdge',
+  'pillBg',
+  'pillEdge',
+  'pillDiv',
+  'barTrack',
+  'aodDim',
+  'aodFaint',
+  'aodText',
+]
+
+/**
+ * The hour and minute rings are not literal colour lists — they sweep hue with
+ * position, so each theme supplies the sweep rather than 36 hard-coded values.
+ * `hue` is the centre, `spread` how far it swings across the dial, and `zero`
+ * the single marker (00) called out brighter than the rest.
+ */
+const THEMES = [
+  {
+    id: 1,
+    key: 't1',
+    name: 'Aurora',
+    ring: { hue: 250, spread: 45, sat: 62, light: 68, lightQuarter: 78, zero: '#f6ecfa' },
+    minRing: { sat: 38, light: 66, zero: '#d6cfe2' },
+    C: {
+      bg: '#000000',
+      primary: '#f24bcf',
+      marker: '#ee4cc4',
+      markerFill: '#16091a',
+      accent: '#0be0f2',
+      accentDim: '#0d4c56',
+      iconDistance: '#7175ff',
+      iconSteps: '#55b1ff',
+      iconDate: '#8483f5',
+      white: '#ffffff',
+      label: '#efecf7',
+      chip: '#0d0c1c',
+      tileBg: '#0a0a2c',
+      tileEdge: '#1c1c58',
+      pillBg: '#0c0c3f',
+      pillEdge: '#22236f',
+      pillDiv: '#383993',
+      barTrack: '#1b1966',
+      aodDim: '#5a5a6e',
+      aodFaint: '#33333f',
+      aodText: '#c8c8d8',
+    },
+  },
+  {
+    id: 2,
+    key: 't2',
+    name: 'Sand',
+    ring: { hue: 30, spread: 14, sat: 40, light: 70, lightQuarter: 80, zero: '#fbe8d5' },
+    minRing: { sat: 26, light: 62, zero: '#e0c8ae' },
+    C: {
+      bg: '#000000',
+      primary: '#d2a483',
+      marker: '#c98f63',
+      markerFill: '#1c120a',
+      accent: '#32bfcb',
+      accentDim: '#0f3a3e',
+      iconDistance: '#c3a184',
+      iconSteps: '#e0bb96',
+      iconDate: '#b08a6d',
+      white: '#fff6ec',
+      label: '#fad9c1',
+      chip: '#191310',
+      tileBg: '#241a15',
+      tileEdge: '#4a382c',
+      pillBg: '#382d2c',
+      pillEdge: '#5c4740',
+      pillDiv: '#7d6154',
+      barTrack: '#4a382c',
+      aodDim: '#5a5a6e',
+      aodFaint: '#33333f',
+      aodText: '#c8c8d8',
+    },
+  },
+  {
+    id: 3,
+    key: 't3',
+    name: 'Graphite',
+    ring: { hue: 220, spread: 10, sat: 6, light: 72, lightQuarter: 84, zero: '#ffffff' },
+    minRing: { sat: 4, light: 62, zero: '#d4d4d6' },
+    C: {
+      bg: '#000000',
+      primary: '#e8e8ea',
+      marker: '#c8c8cc',
+      markerFill: '#17171a',
+      accent: '#54bb54',
+      accentDim: '#173a17',
+      iconDistance: '#a9a8a8',
+      iconSteps: '#c9c9cb',
+      iconDate: '#8f8f92',
+      white: '#ffffff',
+      label: '#f6f8f8',
+      chip: '#151516',
+      tileBg: '#1c1c1e',
+      tileEdge: '#3a3a3d',
+      pillBg: '#353535',
+      pillEdge: '#555558',
+      pillDiv: '#77777a',
+      barTrack: '#3a3a3d',
+      aodDim: '#5a5a6e',
+      aodFaint: '#33333f',
+      aodText: '#c8c8d8',
+    },
+  },
+  {
+    id: 4,
+    key: 't4',
+    name: 'Blossom',
+    ring: { hue: 330, spread: 30, sat: 50, light: 70, lightQuarter: 80, zero: '#ffd9e6' },
+    minRing: { sat: 32, light: 64, zero: '#e8b8ce' },
+    C: {
+      bg: '#000000',
+      primary: '#ef558a',
+      marker: '#e8467f',
+      markerFill: '#1e0a16',
+      accent: '#41dbac',
+      accentDim: '#123b30',
+      iconDistance: '#c86ab8',
+      iconSteps: '#ef8bb0',
+      iconDate: '#b45fa0',
+      white: '#ffffff',
+      label: '#f5c5d7',
+      chip: '#1a0f18',
+      tileBg: '#2a1130',
+      tileEdge: '#54265f',
+      pillBg: '#431c55',
+      pillEdge: '#6b3080',
+      pillDiv: '#8f4aa8',
+      barTrack: '#54265f',
+      aodDim: '#5a5a6e',
+      aodFaint: '#33333f',
+      aodText: '#c8c8d8',
+    },
+  },
+]
+
+/** Fails loudly rather than letting a theme quietly miss or invent a role. */
+function checkThemes() {
+  for (const t of THEMES) {
+    for (const role of ROLES) {
+      if (!t.C[role]) {
+        throw new Error('theme ' + t.key + ' (' + t.name + ") is missing the '" + role + "' colour")
+      }
+    }
+    for (const extra of Object.keys(t.C)) {
+      if (ROLES.indexOf(extra) === -1) {
+        throw new Error('theme ' + t.key + " defines unknown role '" + extra + "'")
+      }
+    }
+  }
+  return THEMES.length
 }
+
+const themeByKey = (key) => THEMES.filter((t) => t.key === key)[0] || THEMES[0]
 
 // ------------------------------------------------------------------ dial ---
 //
@@ -138,10 +296,10 @@ const SLOTS = [
     key: 'hr',
     box: { x: 12, y: 28, w: 100, h: 78 },
     icon: 'heart',
-    iconColor: C.pink,
+    iconColor: 'primary',
     meter: { name: 'hr', dx: 32, dy: 11, w: 59, h: 14 }, // zone bar, replaces the label
-    value: { size: 28, color: C.pink, w: 50 },
-    unit: { text: 'BPM', color: C.white, size: 13, dx: 60, w: 38 },
+    value: { size: 28, color: 'primary', w: 50 },
+    unit: { text: 'BPM', color: 'white', size: 13, dx: 60, w: 38 },
     dataType: 'HEART',
     app: 'HR',
   },
@@ -149,10 +307,10 @@ const SLOTS = [
     key: 'distance',
     box: { x: 12, y: 112, w: 100, h: 78 },
     icon: 'pin',
-    iconColor: C.blue,
+    iconColor: 'iconDistance',
     label: 'Distance',
-    value: { size: 28, color: C.pink, w: 57 },
-    unit: { text: 'KM', color: C.blue, size: 13, dx: 67, w: 32 },
+    value: { size: 28, color: 'primary', w: 57 },
+    unit: { text: 'KM', color: 'iconDistance', size: 13, dx: 67, w: 32 },
     dataType: 'DISTANCE',
     app: 'STATUS',
   },
@@ -160,9 +318,9 @@ const SLOTS = [
     key: 'steps',
     box: { x: 12, y: 196, w: 100, h: 78 },
     icon: 'steps',
-    iconColor: C.sky,
+    iconColor: 'iconSteps',
     label: 'Steps',
-    value: { size: 28, color: C.pink, w: 82 },
+    value: { size: 28, color: 'primary', w: 82 },
     dataType: 'STEP',
     app: 'STATUS',
   },
@@ -171,22 +329,22 @@ const SLOTS = [
     // squared off with the column above it, which hands the width to the battery
     box: { x: 12, y: 280, w: 100, h: 68 },
     icon: 'calendar',
-    iconColor: C.violet,
+    iconColor: 'iconDate',
     label: 'Date',
     // 'WED 26' measures 82px on the device at size 24 — exactly the content
     // width, which is what set the marquee off. One size down plus a box that
     // runs past the nominal padding gives it real slack.
-    value: { size: 23, color: C.pink, w: 88 },
+    value: { size: 23, color: 'primary', w: 88 },
     app: 'CALENDAR',
   },
   {
     key: 'battery',
     box: { x: 118, y: 280, w: 262, h: 68 },
     icon: 'bolt',
-    iconColor: C.cyan,
+    iconColor: 'accent',
     label: 'Battery',
     meter: { name: 'battery', dx: 62, dy: 31, w: 191, h: 26 }, // sits beside the reading
-    value: { size: 28, color: C.cyan, w: 50 },
+    value: { size: 28, color: 'accent', w: 50 },
     dataType: 'BATTERY',
     app: 'SETTING',
   },
@@ -297,23 +455,26 @@ function hsl(h, s, l) {
 }
 
 /**
- * Hue sweep around the dial: blue on the right half, magenta on the left,
- * matching the gradient in the reference mockup.
+ * Hue sweep around the dial — one side of the ring runs cooler than the other.
+ * The theme supplies the centre hue and how far it swings.
  */
-function ringHue(deg) {
-  return 250 - 45 * Math.sin((deg * Math.PI) / 180)
+function ringHue(theme, deg) {
+  return theme.ring.hue - theme.ring.spread * Math.sin((deg * Math.PI) / 180)
 }
 
-function hourColor(hour) {
-  if (hour === 0) return '#f6ecfa'
-  const deg = hour * 15
+function hourColor(theme, hour) {
+  if (hour === 0) return theme.ring.zero
   const quarter = hour % 6 === 0
-  return hsl(ringHue(deg), 62, quarter ? 78 : 68)
+  return hsl(
+    ringHue(theme, hour * 15),
+    theme.ring.sat,
+    quarter ? theme.ring.lightQuarter : theme.ring.light
+  )
 }
 
-function minuteLabelColor(minute) {
-  if (minute === 0) return '#d6cfe2'
-  return hsl(ringHue(minute * 6), 38, 66)
+function minuteLabelColor(theme, minute) {
+  if (minute === 0) return theme.minRing.zero
+  return hsl(ringHue(theme, minute * 6), theme.minRing.sat, theme.minRing.light)
 }
 
 const pad2 = (n) => (n < 10 ? '0' + n : String(n))
@@ -347,7 +508,10 @@ const ICONS = {
 module.exports = {
   W,
   H,
-  C,
+  ROLES,
+  THEMES,
+  themeByKey,
+  checkThemes,
   DIAL,
   TILE,
   SLOTS,

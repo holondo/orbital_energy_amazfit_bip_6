@@ -13,8 +13,3 @@ selenium-debug.log
 *.ntvs*
 *.njsproj
 *.sln
-.downloads/
-.zeus/
-.render/
-tools/node_modules/
-reference/original-package/

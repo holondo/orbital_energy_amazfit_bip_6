@@ -17,6 +17,12 @@ const { Resvg } = require('@resvg/resvg-js')
 const { PNG } = require('pngjs')
 const D = require('./design.cjs')
 
+/**
+ * The generator draws one theme at a time; `T` is whichever is being rendered.
+ * Every colour below reads through it, so adding a theme costs nothing here.
+ */
+let T = D.THEMES[0]
+
 const ROOT = path.resolve(__dirname, '..')
 const OUT = path.join(ROOT, 'assets', 'default')
 const FONT_DIR = 'C:/Windows/Fonts'
@@ -82,7 +88,7 @@ function text(cx, cy, str, opts = {}) {
   // measured for it, defaulting to Segoe UI's.
   const y = cy + size * (opts.baseline || 0.35)
   const family = opts.family || FAMILY
-  const fill = opts.color || D.C.white
+  const fill = opts.color || T.C.white
   // A stroke in the fill colour, painted underneath, is how a face with no
   // bold weight gets one.
   const bolder = opts.stroke
@@ -111,7 +117,7 @@ function icon(name, x, y, size, color) {
     '</g>'
   if (name === 'calendar') {
     body +=
-      `<g transform="translate(${round(x)} ${round(y)}) scale(${round(s)})" fill="${D.C.bg}">` +
+      `<g transform="translate(${round(x)} ${round(y)}) scale(${round(s)})" fill="${T.C.bg}">` +
       D.ICONS.calendarHoles +
       '</g>'
   }
@@ -127,10 +133,10 @@ function dialLayer(cx, cy) {
 
   for (let h = 0; h < 24; h += 1) {
     const p = D.polar(cx, cy, rHour, h * 15)
-    out += `<circle cx="${round(p.x)}" cy="${round(p.y)}" r="${hourChipR}" fill="${D.C.chip}"/>`
+    out += `<circle cx="${round(p.x)}" cy="${round(p.y)}" r="${hourChipR}" fill="${T.C.chip}"/>`
     out += text(p.x, p.y, D.pad2(h), {
       size: h % 6 === 0 ? hourFont + 1 : hourFont,
-      color: D.hourColor(h),
+      color: D.hourColor(T, h),
       weight: h % 6 === 0 ? 700 : 600,
     })
   }
@@ -139,10 +145,10 @@ function dialLayer(cx, cy) {
   // the exact minute is spelled out in the highlight chip anyway.
   for (let m = 0; m < 60; m += 5) {
     const p = D.polar(cx, cy, rMin, m * 6)
-    out += `<circle cx="${round(p.x)}" cy="${round(p.y)}" r="${minChipR}" fill="${D.C.chip}"/>`
+    out += `<circle cx="${round(p.x)}" cy="${round(p.y)}" r="${minChipR}" fill="${T.C.chip}"/>`
     out += text(p.x, p.y, D.pad2(m), {
       size: m % 15 === 0 ? minFont + 1 : minFont,
-      color: D.minuteLabelColor(m),
+      color: D.minuteLabelColor(T, m),
       weight: m % 15 === 0 ? 700 : 600,
     })
   }
@@ -160,20 +166,20 @@ function tiles() {
 
     out +=
       `<rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" rx="${D.TILE.r}" ` +
-      `fill="${D.C.tileBg}" stroke="${D.C.tileEdge}" stroke-width="1"/>`
+      `fill="${T.C.tileBg}" stroke="${T.C.tileEdge}" stroke-width="1"/>`
 
     out += icon(
       slot.icon,
       box.x + D.TILE.pad,
       box.y + D.TILE.labelDy - D.TILE.iconSize / 2,
       D.TILE.iconSize,
-      slot.iconColor
+      T.C[slot.iconColor]
     )
 
     if (slot.label) {
       out += text(box.x + D.TILE.labelDx, D.tileLabelY(box), slot.label, {
         size: D.TILE.labelSize,
-        color: D.C.label,
+        color: T.C.label,
         weight: 600,
         anchor: 'start',
       })
@@ -185,7 +191,7 @@ function tiles() {
       const m = slot.meter
       out +=
         `<rect x="${box.x + m.dx}" y="${box.y + m.dy}" width="${m.w}" height="${m.h}" ` +
-        `rx="${m.h / 2}" fill="${D.C.barTrack}"/>`
+        `rx="${m.h / 2}" fill="${T.C.barTrack}"/>`
     }
   }
 
@@ -204,8 +210,8 @@ function hrParts(pct) {
   return {
     defs: '',
     body:
-      `<rect x="0" y="0" width="${w}" height="${h}" rx="${r}" fill="${D.C.barTrack}"/>` +
-      (lit > 0 ? `<rect x="0" y="0" width="${lit}" height="${h}" rx="${r}" fill="${D.C.pink}"/>` : ''),
+      `<rect x="0" y="0" width="${w}" height="${h}" rx="${r}" fill="${T.C.barTrack}"/>` +
+      (lit > 0 ? `<rect x="0" y="0" width="${lit}" height="${h}" rx="${r}" fill="${T.C.primary}"/>` : ''),
   }
 }
 
@@ -233,8 +239,8 @@ function waveParts(pct, id) {
       `<clipPath id="${id}"><rect x="0" y="0" ` +
       `width="${round(Math.max(x1 * pct, 0.001))}" height="${h}"/></clipPath>`,
     body:
-      `<path d="${d}" ${stroke} stroke="${D.C.cyanDim}"/>` +
-      `<g clip-path="url(#${id})"><path d="${d}" ${stroke} stroke="${D.C.cyan}"/></g>`,
+      `<path d="${d}" ${stroke} stroke="${T.C.accentDim}"/>` +
+      `<g clip-path="url(#${id})"><path d="${d}" ${stroke} stroke="${T.C.accent}"/></g>`,
   }
 }
 
@@ -251,18 +257,18 @@ function meterFrame(name, pct) {
 function pillRow() {
   let out =
     `<rect x="${D.PILL.x}" y="${D.PILL.y}" width="${D.PILL.w}" height="${D.PILL.h}" ` +
-    `rx="${D.PILL.r}" fill="${D.C.pillBg}" stroke="${D.C.pillEdge}" stroke-width="1"/>`
+    `rx="${D.PILL.r}" fill="${T.C.pillBg}" stroke="${T.C.pillEdge}" stroke-width="1"/>`
 
   for (let i = 0; i < D.PILL.cells.length - 1; i += 1) {
     out +=
       `<rect x="${D.cellDivider(i)}" y="${D.PILL.y + D.PILL.divInset}" width="1" ` +
-      `height="${D.PILL.h - D.PILL.divInset * 2}" fill="${D.C.pillDiv}"/>`
+      `height="${D.PILL.h - D.PILL.divInset * 2}" fill="${T.C.pillDiv}"/>`
   }
 
   D.PILL.cells.forEach((cell, i) => {
     out += text(D.cellCenter(i), D.PILL.y + D.TILE.labelDy, cell.label, {
       size: D.PILL.labelSize,
-      color: D.C.label,
+      color: T.C.label,
       weight: 600,
     })
   })
@@ -277,12 +283,12 @@ function highlightSprite(box, r, label, fontSize) {
   return svgDoc(
     box,
     box,
-    `<circle cx="${c}" cy="${c}" r="${r + 4}" fill="${D.C.magenta}" opacity="0.13"/>` +
-      `<circle cx="${c}" cy="${c}" r="${r}" fill="#16091a"/>` +
-      `<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${D.C.magenta}" stroke-width="2.5"/>` +
+    `<circle cx="${c}" cy="${c}" r="${r + 4}" fill="${T.C.marker}" opacity="0.13"/>` +
+      `<circle cx="${c}" cy="${c}" r="${r}" fill="${T.C.markerFill}"/>` +
+      `<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${T.C.marker}" stroke-width="2.5"/>` +
       text(c, c, label, {
         size: fontSize,
-        color: D.C.pink,
+        color: T.C.primary,
         weight: 400,
         family: D.DIAL.markerFont,
         baseline: D.DIAL.markerBaseline,
@@ -296,8 +302,18 @@ function aodRingSprite(box, r) {
   return svgDoc(
     box,
     box,
-    `<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${D.C.aodText}" stroke-width="2"/>`
+    `<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${T.C.aodText}" stroke-width="2"/>`
   )
+}
+
+/**
+ * The overlay and hint backdrop WATCHFACE_EDIT_BG expects. The stock faces
+ * pass both (highlight.png / tip.png); leaving them out is the difference
+ * between the editor initialising and quietly doing nothing. Transparent, so
+ * they add no chrome of their own.
+ */
+function editorChromeSvg(w, h) {
+  return svgDoc(w, h, `<rect width="${w}" height="${h}" fill="none"/>`)
 }
 
 /**
@@ -325,7 +341,7 @@ function tempGlyph(ch, width) {
   return svgDoc(
     w,
     TEMP_GLYPH.h,
-    text(w / 2, TEMP_GLYPH.h / 2, ch, { size: D.PILL.valueSize, color: D.C.pink, weight: 600 })
+    text(w / 2, TEMP_GLYPH.h / 2, ch, { size: D.PILL.valueSize, color: T.C.primary, weight: 600 })
   )
 }
 
@@ -335,7 +351,7 @@ function backgroundSvg() {
   return svgDoc(
     D.W,
     D.H,
-    `<rect width="${D.W}" height="${D.H}" fill="${D.C.bg}"/>` +
+    `<rect width="${D.W}" height="${D.H}" fill="${T.C.bg}"/>` +
       dialLayer(D.DIAL.cx, D.DIAL.cy) +
       tiles() +
       pillRow()
@@ -344,7 +360,7 @@ function backgroundSvg() {
 
 function aodSvg() {
   const { cx, cy, rHour, rMin } = D.AOD
-  let out = `<rect width="${D.W}" height="${D.H}" fill="${D.C.bg}"/>`
+  let out = `<rect width="${D.W}" height="${D.H}" fill="${T.C.bg}"/>`
 
   for (let h = 0; h < 24; h += 1) {
     const p = D.polar(cx, cy, rHour, h * 15)
@@ -352,12 +368,12 @@ function aodSvg() {
     out +=
       `<circle cx="${round(p.x)}" cy="${round(p.y)}" ` +
       `r="${quarter ? D.AOD.quarterDotR : D.AOD.hourDotR}" ` +
-      `fill="${quarter ? D.C.aodDim : D.C.aodFaint}"/>`
+      `fill="${quarter ? T.C.aodDim : T.C.aodFaint}"/>`
   }
 
   for (let m = 0; m < 60; m += 5) {
     const p = D.polar(cx, cy, rMin, m * 6)
-    out += `<circle cx="${round(p.x)}" cy="${round(p.y)}" r="${D.AOD.minDotR}" fill="${D.C.aodFaint}"/>`
+    out += `<circle cx="${round(p.x)}" cy="${round(p.y)}" r="${D.AOD.minDotR}" fill="${T.C.aodFaint}"/>`
   }
 
   return svgDoc(D.W, D.H, out)
@@ -377,7 +393,7 @@ function previewSvg(sample) {
 
     out += text(box.x + D.TILE.pad, D.tileValueY(box), value, {
       size: slot.value.size,
-      color: slot.value.color,
+      color: T.C[slot.value.color],
       weight: 700,
       anchor: 'start',
     })
@@ -385,7 +401,7 @@ function previewSvg(sample) {
     if (slot.unit) {
       out += text(box.x + slot.unit.dx, D.tileValueY(box) + 6, slot.unit.text || sample[slot.key + 'Unit'], {
         size: slot.unit.size,
-        color: slot.unit.color,
+        color: T.C[slot.unit.color],
         weight: 600,
         anchor: 'start',
       })
@@ -406,18 +422,18 @@ function previewSvg(sample) {
   D.PILL.cells.forEach((cell, i) => {
     out += text(D.cellCenter(i), D.PILL.y + D.PILL.h - D.TILE.valueDy, sample[cell.key], {
       size: D.PILL.valueSize,
-      color: D.C.pink,
+      color: T.C.primary,
       weight: 700,
     })
   })
 
   const ring = (p, r, label, size) =>
-    `<circle cx="${round(p.x)}" cy="${round(p.y)}" r="${r + 4}" fill="${D.C.magenta}" opacity="0.13"/>` +
-    `<circle cx="${round(p.x)}" cy="${round(p.y)}" r="${r}" fill="#16091a"/>` +
-    `<circle cx="${round(p.x)}" cy="${round(p.y)}" r="${r}" fill="none" stroke="${D.C.magenta}" stroke-width="2.5"/>` +
+    `<circle cx="${round(p.x)}" cy="${round(p.y)}" r="${r + 4}" fill="${T.C.marker}" opacity="0.13"/>` +
+    `<circle cx="${round(p.x)}" cy="${round(p.y)}" r="${r}" fill="${T.C.markerFill}"/>` +
+    `<circle cx="${round(p.x)}" cy="${round(p.y)}" r="${r}" fill="none" stroke="${T.C.marker}" stroke-width="2.5"/>` +
     text(p.x, p.y, label, {
       size,
-      color: D.C.pink,
+      color: T.C.primary,
       weight: 400,
       family: D.DIAL.markerFont,
       baseline: D.DIAL.markerBaseline,
@@ -471,7 +487,7 @@ function emitLayout() {
       w: slot.value.w,
       h: 36,
       size: slot.value.size,
-      color: slot.value.color,
+      color: slot.value.color, // role name — the runtime resolves it per theme
     },
     unit: slot.unit
       ? {
@@ -523,31 +539,43 @@ function emitLayout() {
 
 export const SCREEN = { w: ${D.W}, h: ${D.H} }
 
-export const COLOR = {
-  bg: ${hex(D.C.bg)},
-  pink: ${hex(D.C.pink)},
-  cyan: ${hex(D.C.cyan)},
-  white: ${hex(D.C.white)},
-  aodText: ${hex(D.C.aodText)},
-}
+/**
+ * One entry per theme. Its color map is keyed by role, so a slot that asks
+ * for 'primary' gets whatever this theme calls primary.
+ */
+export const THEMES = ${jsonWithColors(
+    D.THEMES.map((t) => ({ id: t.id, key: t.key, name: t.name, color: t.C }))
+  )}
 
+const pad = (n) => (n < 10 ? '0' + n : '' + n)
+
+/**
+ * Theme-scoped paths take the theme key; the rest are shared.
+ *
+ * The two the editor consumes live flat at the assets root rather than inside
+ * the theme folder — that is how the stock faces name them
+ * (background_theme1.png), and WATCHFACE_EDIT_BG drew nothing when they were
+ * given as a subfolder path.
+ */
 export const IMAGE = {
-  bg: 'bg.png',
+  bg: (t) => 'bg_' + t + '.png',
+  preview: (t) => 'preview_' + t + '.png',
+  hourHighlight: (t, h) => t + '/hl/h' + pad(h) + '.png',
+  minuteHighlight: (t, m) => t + '/hl/m' + pad(m) + '.png',
+  meter: (t, name, step) => t + '/meter/' + name + '/' + pad(step) + '.png',
+  tempGlyph: (t, ch) => t + '/temp/' + ch + '.png',
   aod: 'aod.png',
-  hourHighlight: (h) => 'hl/h' + (h < 10 ? '0' + h : h) + '.png',
-  minuteHighlight: (m) => 'hl/m' + (m < 10 ? '0' + m : m) + '.png',
-  meter: (name, step) => 'meter/' + name + '/' + (step < 10 ? '0' + step : step) + '.png',
   aodHourRing: 'hl/aod_h.png',
   aodMinuteRing: 'hl/aod_m.png',
+  editorFg: 'edit_fg.png',
+  editorTips: 'edit_tips.png',
 }
 
-export const TEMP_FONT = [
-  'temp/0.png', 'temp/1.png', 'temp/2.png', 'temp/3.png', 'temp/4.png',
-  'temp/5.png', 'temp/6.png', 'temp/7.png', 'temp/8.png', 'temp/9.png',
-]
-export const TEMP_DEGREE = 'temp/deg.png'
-export const TEMP_NEGATIVE = 'temp/neg.png'
-export const TEMP_INVALID = 'temp/dash.png'
+export const TEMP_FONT = (t) =>
+  ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => IMAGE.tempGlyph(t, d))
+export const TEMP_DEGREE = (t) => IMAGE.tempGlyph(t, 'deg')
+export const TEMP_NEGATIVE = (t) => IMAGE.tempGlyph(t, 'neg')
+export const TEMP_INVALID = (t) => IMAGE.tempGlyph(t, 'dash')
 
 /** Top-left corner of the ${hlHourBox}x${hlHourBox} hour chip, per hour. */
 export const HOUR_POS = ${JSON.stringify(chipPositions(cx, cy, hlHourCentre, 24, 15, hlHourBox))}
@@ -638,10 +666,27 @@ function checkMarkerFit(radius, font, label) {
 
 // ----------------------------------------------------------------- main ----
 
+/** The readings drawn into every theme's preview image. */
+const SAMPLE = {
+  hr: '87',
+  distance: '3.50',
+  steps: '4505',
+  date: 'TUE 30',
+  battery: '65',
+  temp: '23\u00b0',
+  kcal: '450',
+  stress: '56',
+  pai: '23',
+  hour: 14,
+  minute: 20,
+}
+
 function main() {
+  const themeCount = D.checkThemes()
   const gap = D.checkGeometry()
   const hourFit = checkMarkerFit(D.DIAL.hlHourR, D.DIAL.hlHourFont, 'hour')
   const minFit = checkMarkerFit(D.DIAL.hlMinR, D.DIAL.hlMinFont, 'minute')
+  console.log(`  ${themeCount} themes: ` + D.THEMES.map((t) => t.name).join(', '))
   console.log(
     `  marker clearance ${gap}px; digits clear the ring by ` +
     `${hourFit.toFixed(1)}px (hour, size ${D.DIAL.hlHourFont}) and ` +
@@ -652,8 +697,12 @@ function main() {
   }
   mkdirp(OUT)
 
-  render(backgroundSvg(), 'bg.png')
+  // shared, colour-independent
   render(aodSvg(), 'aod.png')
+  render(editorChromeSvg(D.W, D.H), 'edit_fg.png')
+  render(editorChromeSvg(120, 40), 'edit_tips.png')
+  render(aodRingSprite(D.DIAL.hlHourBox, D.DIAL.hlHourR), 'hl/aod_h.png')
+  render(aodRingSprite(D.DIAL.hlMinBox, D.DIAL.hlMinR), 'hl/aod_m.png')
 
   const hitSizes = new Set()
   D.SLOTS.forEach((s) => hitSizes.add(s.box.w + 'x' + s.box.h))
@@ -663,50 +712,44 @@ function main() {
     render(hitSprite(w, h), hitName(w, h))
   })
 
-  for (let h = 0; h < 24; h += 1) {
-    render(
-      highlightSprite(D.DIAL.hlHourBox, D.DIAL.hlHourR, D.pad2(h), D.DIAL.hlHourFont),
-      `hl/h${D.pad2(h)}.png`
-    )
-  }
-  for (let m = 0; m < 60; m += 1) {
-    render(
-      highlightSprite(D.DIAL.hlMinBox, D.DIAL.hlMinR, D.pad2(m), D.DIAL.hlMinFont),
-      `hl/m${D.pad2(m)}.png`
-    )
-  }
-  render(aodRingSprite(D.DIAL.hlHourBox, D.DIAL.hlHourR), 'hl/aod_h.png')
-  render(aodRingSprite(D.DIAL.hlMinBox, D.DIAL.hlMinR), 'hl/aod_m.png')
+  // one folder per theme
+  for (const theme of D.THEMES) {
+    T = theme
+    const dir = theme.key + '/'
 
-  for (const slot of D.SLOTS) {
-    if (!slot.meter) continue
-    for (let i = 0; i < D.METER_STEPS; i += 1) {
-      render(meterFrame(slot.meter.name, i / (D.METER_STEPS - 1)), `meter/${slot.meter.name}/${D.pad2(i)}.png`)
+    render(backgroundSvg(), 'bg_' + theme.key + '.png')
+
+    for (let h = 0; h < 24; h += 1) {
+      render(
+        highlightSprite(D.DIAL.hlHourBox, D.DIAL.hlHourR, D.pad2(h), D.DIAL.hlHourFont),
+        dir + `hl/h${D.pad2(h)}.png`
+      )
     }
+    for (let m = 0; m < 60; m += 1) {
+      render(
+        highlightSprite(D.DIAL.hlMinBox, D.DIAL.hlMinR, D.pad2(m), D.DIAL.hlMinFont),
+        dir + `hl/m${D.pad2(m)}.png`
+      )
+    }
+
+    for (const slot of D.SLOTS) {
+      if (!slot.meter) continue
+      for (let i = 0; i < D.METER_STEPS; i += 1) {
+        render(meterFrame(slot.meter.name, i / (D.METER_STEPS - 1)), dir + `meter/${slot.meter.name}/${D.pad2(i)}.png`)
+      }
+    }
+
+    for (let d = 0; d < 10; d += 1) render(tempGlyph(String(d)), dir + `temp/${d}.png`)
+    render(tempGlyph('\u00b0', 12), dir + 'temp/deg.png')
+    render(tempGlyph('-', 12), dir + 'temp/neg.png')
+    render(tempGlyph('\u2013', 17), dir + 'temp/dash.png')
+
+    const preview = previewSvg(SAMPLE)
+    render(preview, 'preview_' + theme.key + '.png')
+    // the watchface list thumbnail comes from the first theme
+    if (theme.id === 1) render(preview, 'icon.png')
   }
-
-  for (let d = 0; d < 10; d += 1) render(tempGlyph(String(d)), `temp/${d}.png`)
-  render(tempGlyph('°', 12), 'temp/deg.png')
-  render(tempGlyph('-', 12), 'temp/neg.png')
-  render(tempGlyph('–', 17), 'temp/dash.png')
-
-  const preview = previewSvg({
-    hr: '87',
-    distance: '3.50',
-    steps: '4505',
-    date: 'TUE 30',
-    stand: '8',
-    standUnit: '/12',
-    battery: '65',
-    temp: '23°',
-    kcal: '450',
-    stress: '56',
-    pai: '22',
-    hour: 18,
-    minute: 19,
-  })
-  render(preview, 'preview.png')
-  render(preview, 'icon.png')
+  T = D.THEMES[0]
 
   emitLayout()
   console.log(`✓ ${written} PNGs written to assets/default`)

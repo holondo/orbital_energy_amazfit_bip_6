@@ -31,12 +31,16 @@ const LV_AOD = 0x2
 
 const align = { LEFT: 'LEFT', RIGHT: 'RIGHT', CENTER_H: 'CENTER_H', TOP: 'TOP', BOTTOM: 'BOTTOM', CENTER_V: 'CENTER_V' }
 const text_style = { NONE: 0, WRAP: 1, ELLIPSIS: 2, CHAR_WRAP: 3 }
-const prop = { MORE: 'MORE', X: 'X', Y: 'Y', VISIBLE: 'VISIBLE' }
+const prop = { MORE: 'MORE', X: 'X', Y: 'Y', VISIBLE: 'VISIBLE', CURRENT_TYPE: 'CURRENT_TYPE' }
+
+/** Which theme the edit widget reports back. SIM_THEME=3 renders Graphite. */
+const THEME_ID = Number(process.env.SIM_THEME || 1)
 const widget = {
   IMG: 'IMG',
   IMG_CLICK: 'IMG_CLICK',
   BUTTON: 'BUTTON',
   WIDGET_DELEGATE: 'WIDGET_DELEGATE',
+  WATCHFACE_EDIT_BG: 'WATCHFACE_EDIT_BG',
   TEXT: 'TEXT',
   FILL_RECT: 'FILL_RECT',
   TEXT_IMG: 'TEXT_IMG',
@@ -51,6 +55,8 @@ const BARE = process.env.SIM_BARE === '1'
 if (BARE) {
   delete widget.IMG_CLICK
   delete prop.VISIBLE
+  delete widget.WATCHFACE_EDIT_BG
+  delete prop.CURRENT_TYPE
 }
 
 const data_type = {
@@ -86,6 +92,7 @@ const deleteWidget = BARE
 function createWidget(type, options) {
   const w = { type, props: Object.assign({}, options) }
   created.push(w)
+  if (type === widget.WATCHFACE_EDIT_BG) w.props[prop.CURRENT_TYPE] = THEME_ID
   w.setProperty = (which, patch) => {
     if (which !== prop.MORE) throw new Error('unexpected prop ' + which)
     Object.assign(w.props, patch)
@@ -170,15 +177,27 @@ const MODULES = {
 
 // ------------------------------------------------------------ ESM shim -----
 
-/** Rewrites the watchface's ES modules into something require() can run. */
+/**
+ * Rewrites the watchface's ES modules into something require() can run.
+ *
+ * Exports become plain `const` declarations plus a trailing assignment, so an
+ * export that references another one (TEMP_FONT builds on IMAGE) resolves the
+ * same way it would in a real module.
+ */
 function toCommonJs(source, resolveImport) {
-  return source
-    .replace(/import\s*\{([\s\S]*?)\}\s*from\s*'([^']+)'/g, (_, names, from) => {
-      const clean = names.replace(/\s+/g, ' ').trim()
-      return `const { ${clean} } = ${resolveImport(from)}`
-    })
-    .replace(/^export const /gm, 'exports.')
-    .replace(/^exports\.(\w+) = /gm, 'exports.$1 = ')
+  const names = []
+  let out = source.replace(/import\s*\{([\s\S]*?)\}\s*from\s*'([^']+)'/g, (_, imported, from) => {
+    const clean = imported.replace(/\s+/g, ' ').trim()
+    return `const { ${clean} } = ${resolveImport(from)}`
+  })
+  out = out.replace(/^export const (\w+)/gm, (_, name) => {
+    names.push(name)
+    return 'const ' + name
+  })
+  if (names.length) {
+    out += '\n' + names.map((n) => `exports.${n} = ${n}`).join('\n') + '\n'
+  }
+  return out
 }
 
 function loadModule(file, resolveImport) {
@@ -236,6 +255,8 @@ for (const w of created) {
   const p = w.props
   // WIDGET_DELEGATE is virtual: lifecycle only, it never draws
   if (w.type === widget.WIDGET_DELEGATE) continue
+  // WATCHFACE_EDIT_BG is full-screen and carries no w/h of its own
+  if (w.type === widget.WATCHFACE_EDIT_BG) continue
   if (p.src) {
     const file = path.join(ASSETS, p.src)
     if (!fs.existsSync(file)) problems.push(`missing asset: ${p.src}`)
@@ -369,13 +390,27 @@ if (zones.length && launched.length !== zones.length) {
   problems.push(`${zones.length} tap zones but ${launched.length} launched`)
 }
 
-const isMarker = (w) => String(w.props.src || '').startsWith('hl/')
+const isMarker = (w) => /(^|\/)hl\//.test(String(w.props.src || ''))
 const markers = created.filter(isMarker)
 if (markers.length !== 4) {
   problems.push(`expected 4 orbital markers, found ${markers.length}`)
 } else if (!BARE && created.findIndex(isMarker) < created.length - 4) {
   problems.push('orbital markers are not the last widgets — they would not draw on top')
 }
+for (const w of created) {
+  if (w.type !== widget.WATCHFACE_EDIT_BG) continue
+  for (const entry of w.props.bg_config || []) {
+    for (const key of ['path', 'preview']) {
+      if (!fs.existsSync(path.join(ASSETS, entry[key]))) {
+        problems.push(`theme ${entry.id} ${key} missing: ${entry[key]}`)
+      }
+    }
+  }
+  if (w.props.count !== (w.props.bg_config || []).length) {
+    problems.push('WATCHFACE_EDIT_BG count does not match bg_config length')
+  }
+}
+
 // IMG_CLICK paints its src permanently, so a hit area that is not fully
 // transparent shows up as a box drawn over the tile.
 for (const w of created) {
@@ -394,6 +429,9 @@ for (const m of markers) {
 const live = timers.filter(Boolean)
 if (live.length !== 1) problemsLater.push(`expected exactly 1 poll timer, found ${live.length}`)
 else console.log(`poll timer: every ${live[0].period / 1000}s while awake`)
+
+const themeName = (D.THEMES.filter((t) => t.id === THEME_ID)[0] || D.THEMES[0]).name
+console.log(`theme ${THEME_ID} (${themeName})`)
 
 console.log(`widgets created: ${created.length}`)
 const byType = {}
@@ -417,7 +455,7 @@ if (problems.length) {
   console.log('  ✓ all assets resolve and every widget is on-screen')
 }
 
-console.log('\n' + write(LV_NORMAL, `normal-${D.pad2(HOUR)}${D.pad2(MINUTE)}.png`))
+console.log('\n' + write(LV_NORMAL, `t${THEME_ID}-${D.pad2(HOUR)}${D.pad2(MINUTE)}.png`))
 if (AOD_MODE) console.log(write(LV_AOD, `aod-${D.pad2(HOUR)}${D.pad2(MINUTE)}.png`))
 
 face.onDestroy()

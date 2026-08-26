@@ -9,7 +9,7 @@
       "name": "1.0.0"
     },
     "icon": "icon.png",
-    "cover": ["preview.png"],
+    "cover": ["preview_t1.png"],
     "vender": "holondo",
     "description": "Custom orbital watchface for Amazfit Bip 6"
   },
@@ -34,7 +34,7 @@
         "watchface": {
           "path": "watchface/index",
           "main": 1,
-          "editable": 0,
+          "editable": 1,
           "lockscreen": 1,
           "hightCost": 0
         }

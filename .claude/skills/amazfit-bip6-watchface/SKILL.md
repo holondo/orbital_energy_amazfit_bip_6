@@ -320,6 +320,29 @@ const editBg = createWidget(widget.WATCHFACE_EDIT_BG, {
 
 `count` and `default_id` are **siblings** of `bg_config`, not fields inside it.
 
+**This widget fails silently.** It is constructed with no error, no exception
+and no log line even when it is misconfigured — it simply draws nothing *and
+keeps swallowing every touch in its rectangle*, so the symptom is a black
+screen where none of your tap zones respond. There is nothing to catch. Three
+rules avoid it:
+
+- **Flat asset paths.** Every stock face names these `background_theme1.png`
+  at the root of `assets/`. Subfolder paths (`t1/bg.png`) construct fine and
+  then resolve to nothing. Keep the editor's `path` and `preview` at the root
+  even when the rest of your per-theme assets live in folders.
+- **Pass `fg` and `tips_bg`.** They read as optional chrome and are not.
+  Omitting them is enough on its own to leave the widget half-initialised.
+  Transparent PNGs are fine if you want no chrome — the widget needs the
+  images to exist, not to be visible.
+- **Draw your own background anyway.** Add a plain `IMG` for the resolved
+  theme's background *after* creating the edit widget, with
+  `show_level: LV_NORMAL`. In normal mode it guarantees a background
+  regardless of what the editor did; the `LV_NORMAL` restriction keeps it out
+  of edit mode so it never covers the carousel. The cost is one widget.
+
+The general lesson: a widget that reports success is not a widget that
+rendered. Assert on pixels, not on the absence of exceptions.
+
 - `path` — the background drawn in normal mode for that theme.
 - `preview` — what the carousel shows while cycling. The stock faces make this
   a **full-screen render of the entire face** in that theme (400x450 in the
@@ -366,6 +389,30 @@ theme; the stock seven-theme face ships 775.
 **Sibling editors**, same shape: `WATCHFACE_EDIT_GROUP` (which metric a slot
 shows), `WATCHFACE_EDIT_POINTER`, `WATCHFACE_EDIT_MASK`,
 `WATCHFACE_EDIT_FG_MASK`.
+
+### Building the theme table
+
+Two things make the difference between a themable face and a painful one:
+
+**Reference colours by role, never by hue.** A slot asks for `primary`; the
+theme decides whether that is magenta or tan. A palette keyed `pink` holding a
+brown is how a themes pass turns into a rename marathon. Keep an explicit
+`ROLES` list and fail the build when a theme misses one or invents one — a
+missing role surfaces as a pink element inside a beige theme, which is easy to
+miss by eye across four themes and 500 assets.
+
+**Parameterise anything generated.** A dial whose ring sweeps hue with position
+should not become 36 hard-coded colours per theme; give each theme the sweep
+(centre hue, spread, saturation, lightness) instead. The same goes for derived
+surfaces.
+
+Then the generator draws one theme at a time — a single module-level `T` that
+the loop reassigns keeps the diff to the colour references themselves — and
+emits one folder per theme, leaving the colour-independent assets outside them.
+
+Sanity-check the count before committing: a face with 84 marker sprites, 42
+meter frames and 13 digit glyphs costs ~140 assets per theme. Four themes took
+this project from 149 assets to 572, and the package from 0.5 MB to 2.1 MB.
 
 ---
 
