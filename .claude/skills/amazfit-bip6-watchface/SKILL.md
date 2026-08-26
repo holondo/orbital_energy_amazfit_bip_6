@@ -455,6 +455,26 @@ Two rasteriser quirks:
 Fonts: point `fontFiles` at real files (`C:/Windows/Fonts/segoeui.ttf`,
 `seguisb.ttf`, `segoeuib.ttf`) rather than relying on system matching.
 
+**Anything rasterised into a sprite can use any typeface**, because the watch
+only ever sees a PNG — it never resolves a font. That is the one place a
+watchface can escape the system face. Vendor the file into the repo next to its
+licence so the build is reproducible, and re-measure when you switch: faces
+differ enough to invalidate every size you tuned. Instrument Serif's widest
+two-digit pair is 0.86 em against Segoe UI's 1.12, which allowed a 14% larger
+size in the same circle, and its optical centre sits 0.365 em above the
+baseline rather than 0.35 — pass the offset per face instead of hard-coding
+one.
+
+A display face with no bold weight can still be given one: paint a stroke in
+the fill colour underneath the glyphs (`paint-order="stroke"`). Judge the
+result by how much ink survives a 2px erosion, not by how large the type is —
+a fine serif set 9px larger than a bold sans can still read as wire on a small
+screen. Remember the stroke widens the glyphs, so re-run the fit test with it
+applied.
+
+Live `TEXT` widgets are the opposite: they always render in the device's
+system font, so their boxes must be measured on-device (see §3.2).
+
 ### Bake the static layer
 
 Draw everything that never changes — rings, tick labels, icons, tile

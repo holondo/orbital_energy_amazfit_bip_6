@@ -26,6 +26,17 @@ const FONT_FILES = ['segoeui.ttf', 'seguisb.ttf', 'segoeuib.ttf', 'segoeuisl.ttf
 
 const FAMILY = 'Segoe UI'
 
+/**
+ * The marker digits use their own face (see DIAL.markerFont), vendored under
+ * tools/fonts/ with its licence. Nothing on the watch resolves it — the
+ * markers are rasterised into sprites here.
+ */
+const MARKER_FONT_FILE = path.join(__dirname, 'fonts', 'InstrumentSerif-Regular.ttf')
+if (!fs.existsSync(MARKER_FONT_FILE)) {
+  throw new Error('missing marker font: ' + MARKER_FONT_FILE)
+}
+FONT_FILES.push(MARKER_FONT_FILE)
+
 let written = 0
 
 // --------------------------------------------------------------- plumbing --
@@ -67,10 +78,19 @@ function text(cx, cy, str, opts = {}) {
   const size = opts.size || 14
   const anchor = opts.anchor || 'middle'
   const weight = opts.weight || 600
-  const y = cy + size * 0.35
+  // Each face sits differently on its baseline; the caller passes the offset
+  // measured for it, defaulting to Segoe UI's.
+  const y = cy + size * (opts.baseline || 0.35)
+  const family = opts.family || FAMILY
+  const fill = opts.color || D.C.white
+  // A stroke in the fill colour, painted underneath, is how a face with no
+  // bold weight gets one.
+  const bolder = opts.stroke
+    ? ` stroke="${fill}" stroke-width="${opts.stroke}" paint-order="stroke" stroke-linejoin="round"`
+    : ''
   return (
-    `<text x="${round(cx)}" y="${round(y)}" font-family="${FAMILY}" font-size="${size}" ` +
-    `font-weight="${weight}" fill="${opts.color || D.C.white}" text-anchor="${anchor}">` +
+    `<text x="${round(cx)}" y="${round(y)}" font-family="${family}" font-size="${size}" ` +
+    `font-weight="${weight}" fill="${fill}"${bolder} text-anchor="${anchor}">` +
     escapeXml(str) +
     '</text>'
   )
@@ -260,7 +280,14 @@ function highlightSprite(box, r, label, fontSize) {
     `<circle cx="${c}" cy="${c}" r="${r + 4}" fill="${D.C.magenta}" opacity="0.13"/>` +
       `<circle cx="${c}" cy="${c}" r="${r}" fill="#16091a"/>` +
       `<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${D.C.magenta}" stroke-width="2.5"/>` +
-      text(c, c, label, { size: fontSize, color: D.C.pink, weight: 700 })
+      text(c, c, label, {
+        size: fontSize,
+        color: D.C.pink,
+        weight: 400,
+        family: D.DIAL.markerFont,
+        baseline: D.DIAL.markerBaseline,
+        stroke: D.DIAL.markerStroke,
+      })
   )
 }
 
@@ -388,7 +415,14 @@ function previewSvg(sample) {
     `<circle cx="${round(p.x)}" cy="${round(p.y)}" r="${r + 4}" fill="${D.C.magenta}" opacity="0.13"/>` +
     `<circle cx="${round(p.x)}" cy="${round(p.y)}" r="${r}" fill="#16091a"/>` +
     `<circle cx="${round(p.x)}" cy="${round(p.y)}" r="${r}" fill="none" stroke="${D.C.magenta}" stroke-width="2.5"/>` +
-    text(p.x, p.y, label, { size, color: D.C.pink, weight: 700 })
+    text(p.x, p.y, label, {
+      size,
+      color: D.C.pink,
+      weight: 400,
+      family: D.DIAL.markerFont,
+      baseline: D.DIAL.markerBaseline,
+      stroke: D.DIAL.markerStroke,
+    })
 
   out += ring(
     D.polar(cx, cy, hlHourCentre, sample.hour * 15),
@@ -564,9 +598,21 @@ function checkMarkerFit(radius, font, label) {
   const canvas = 260
   const c = canvas / 2
   const png = PNG.sync.read(
-    new Resvg(svgDoc(canvas, canvas, text(c, c, '07', { size: font, color: '#ffffff', weight: 700 })), {
-      font: { fontFiles: FONT_FILES, loadSystemFonts: FONT_FILES.length === 0, defaultFontFamily: FAMILY },
-    })
+    new Resvg(
+      svgDoc(
+        canvas,
+        canvas,
+        text(c, c, '04', {
+          size: font,
+          color: '#ffffff',
+          weight: 400,
+          family: D.DIAL.markerFont,
+          baseline: D.DIAL.markerBaseline,
+          stroke: D.DIAL.markerStroke,
+        })
+      ),
+      { font: { fontFiles: FONT_FILES, loadSystemFonts: false, defaultFontFamily: FAMILY } }
+    )
       .render()
       .asPng()
   )

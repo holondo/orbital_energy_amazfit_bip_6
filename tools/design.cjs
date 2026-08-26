@@ -69,15 +69,29 @@ const DIAL = {
   hlMinR: 28,
   hlHourBox: 84, // sprite size (marker + glow)
   hlMinBox: 60,
-  // Marker digits as a fraction of the circle's diameter. Measured against all
-  // 100 two-digit pairs, "07" is the one that reaches furthest; at 0.72 it
-  // still clears the ring by 2px. checkMarkerFit() in the generator re-tests
-  // this on every build.
+  // The marker digits are set in Instrument Serif, vendored in tools/fonts/.
+  // Only the generator needs it: the markers ship as PNG sprites, so the watch
+  // never has to resolve the font.
+  //
+  // It is much narrower than the UI face — the widest two-digit pair measures
+  // 0.86 em against Segoe's 1.12 — so the same circle takes a far larger size.
+  //
+  // It has no bold weight, and untouched it is too fine for this display: only
+  // 9% of its ink survives a 2px erosion, against 55% for Segoe UI Bold. The
+  // stroke below thickens the letterforms to 38%, which lands between Segoe's
+  // Semibold and Bold while keeping the serif, and costs one point of size.
+  //
+  // Measured across all 100 two-digit pairs, "04" reaches furthest; at 0.8125
+  // with this stroke it clears the ring by 1.9px. checkMarkerFit() re-tests it
+  // on every build.
+  markerFont: 'Instrument Serif',
+  markerBaseline: 0.365, // em above the baseline to the optical centre
+  markerStroke: 2.4, // drawn under the fill, so it thickens outwards
+  markerFontRatio: 0.8125,
   //
   // A flat disc with the number overflowing it — no ring — was tried and
   // reverted: without an outline the two markers read as one four-digit number
   // whenever they align, as at 06:15.
-  markerFontRatio: 0.72,
 }
 
 /**
@@ -96,8 +110,10 @@ const MAX_SPRITE = 88
 
 DIAL.hlHourCentre = DIAL.rHour + DIAL.hourOverhang - DIAL.hlHourR
 DIAL.hlMinCentre = DIAL.rMin + DIAL.minOverhang - DIAL.hlMinR
-DIAL.hlHourFont = Math.round(2 * DIAL.hlHourR * DIAL.markerFontRatio)
-DIAL.hlMinFont = Math.round(2 * DIAL.hlMinR * DIAL.markerFontRatio)
+// floor, not round: the size is bounded by how much fits inside the ring, so
+// the conservative direction is the correct one.
+DIAL.hlHourFont = Math.floor(2 * DIAL.hlHourR * DIAL.markerFontRatio)
+DIAL.hlMinFont = Math.floor(2 * DIAL.hlMinR * DIAL.markerFontRatio)
 
 // ---------------------------------------------------------------- tiles ----
 const TILE = {

@@ -81,6 +81,7 @@ tocando sete vezes no ícone do Zepp.
 | `tools/zoom.cjs` | Recorta e amplia um PNG para conferir detalhes. |
 | `tools/measure-text.cjs` | Mede a tinta de um texto num print do aparelho, para dimensionar as caixas pela fonte real do relógio. |
 | `tools/diff-device.cjs` | Compõe o esperado e compara com um print do aparelho, marcando as diferenças. |
+| `tools/fonts/` | Fonte vendorizada para os marcadores (Instrument Serif, SIL OFL) e sua licença. |
 | `assets/default/` | **Gerado.** Não editar à mão — `npm run assets` sobrescreve tudo. |
 
 `tools/` só roda no computador; os arquivos usam extensão `.cjs` justamente para
@@ -133,10 +134,24 @@ um sprite passar disso ou se os dois marcadores puderem se sobrepor.
   entrada define a caixa do bloco, o ícone, o tamanho do valor e o campo `app`,
   que é o aplicativo de sistema que um toque abre.
 - **Dias da semana em português:** array `WEEKDAYS` em `watchface/index.js`.
-- **Tamanho dos números dos marcadores:** `markerFontRatio` em `tools/design.cjs`
-  — a fonte é uma fração do diâmetro do círculo, então acompanha o marcador.
-  Está em 0.72, que é o limite: `checkMarkerFit()` desenha o par de dígitos que
-  chega mais longe do centro (`07`) e quebra o build se ele encostar no anel.
+- **Tipografia dos marcadores:** `markerFont`, `markerBaseline`,
+  `markerStroke` e `markerFontRatio` em `tools/design.cjs`. Os números da hora
+  e do minuto usam **Instrument Serif** (SIL OFL, vendorizada em `tools/fonts/`
+  com a licença). Só o gerador precisa dela — os marcadores viram sprites PNG,
+  então o relógio nunca resolve fonte nenhuma. Cada face assenta diferente na
+  linha de base, daí o `markerBaseline` (0.365 em, contra 0.35 da Segoe).
+- **Peso dos marcadores:** a Instrument Serif não tem Bold, e crua ela é fina
+  demais para esta tela — só 9% da tinta sobrevive a uma erosão de 2 px, contra
+  55% da Segoe UI Bold. O `markerStroke` (2,4) desenha um contorno na cor do
+  preenchimento por baixo dele, engrossando as letras para 38%: fica entre a
+  Semibold e a Bold da Segoe, mantendo a serifa, ao custo de um ponto de
+  tamanho.
+- **Tamanho dos números dos marcadores:** `markerFontRatio` é uma fração do
+  diâmetro do círculo, então acompanha o marcador. Está em 0.8125, o limite com
+  esse contorno, e é aplicado com `Math.floor` — o valor é limitado por
+  encaixe, então o lado conservador é o certo. `checkMarkerFit()` desenha o par
+  de dígitos que chega mais longe do centro (`04`), já com o contorno, e quebra
+  o build se ele encostar no anel.
 
 > Um estilo sem anel — disco liso na cor dos blocos e o número transbordando
 > para os lados — foi testado e revertido. Sem contorno, os dois marcadores
