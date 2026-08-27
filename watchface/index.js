@@ -170,7 +170,12 @@ WatchFace({
 
     // Steps and heart rate move far more often than once a minute.
     this.listen(this.step, 'onChange', 'offChange', () => this.refreshSteps())
-    this.listen(this.heartRate, 'onCurrentChange', 'offCurrentChange', () => this.refreshHeartRate())
+    // Deliberately NOT heartRate.onCurrentChange: registering it does not
+    // subscribe to readings, it switches the optical sensor into continuous
+    // measurement until offCurrentChange is called. That is a battery cost the
+    // watch is not otherwise paying, and no stock face asks for it. onLastChange
+    // reports the watch's own automatic monitoring instead, which happens
+    // anyway at whatever cadence the user set in the health settings.
     this.listen(this.heartRate, 'onLastChange', 'offLastChange', () => this.refreshHeartRate())
     this.listen(this.battery, 'onChange', 'offChange', () => this.refreshBattery())
   },
@@ -584,7 +589,9 @@ WatchFace({
   },
 
   refreshHeartRate() {
-    const bpm = this.heartRate.getCurrent() || this.heartRate.getLast() || 0
+    // getLast is the primary source: getCurrent is only meaningful inside an
+    // onCurrentChange callback, which we do not register.
+    const bpm = this.heartRate.getLast() || this.heartRate.getCurrent() || 0
     this.setText('hr', bpm > 0 ? '' + bpm : '--')
     this.setMeter('hr', 'hr', bpm > 0 ? (bpm - HR_MIN) / (HR_MAX - HR_MIN) : 0)
   },

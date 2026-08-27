@@ -447,8 +447,39 @@ import { Time, Battery, Step, HeartRate, Distance, Stand,
 | `Stress.getCurrent()` | `{ value, time }` | an object, not a number |
 | `Pai.getToday()` | earned since midnight | reads **0** most of the day |
 | `Pai.getTotal()` | rolling 7-day score | this is what the watch's PAI screen shows |
-| `HeartRate.getCurrent()` | 0 unless continuous HR is on | fall back to `getLast()` |
+| `HeartRate.getLast()` | last automatic/manual measurement | the one to read on a watchface |
+| `HeartRate.getCurrent()` | 0 unless continuous HR is on | only meaningful inside `onCurrentChange` |
 | `Weather` | forecast high/low only | **no current temperature** |
+
+### `onCurrentChange` is a switch, not a subscription
+
+The one sensor call on this device that costs battery by being *registered*:
+
+```js
+// Turns the optical sensor on and leaves it on.
+heartRate.onCurrentChange(() => { ... })
+```
+
+The SDK's own wording is "call this method and start measuring heart rate
+continuously … if you want to stop the heart rate measurement, you need to call
+`offCurrentChange`". It reads like every other `onXChange` listener in
+`@zos/sensor` and it is not one — the rest are passive, this one drives the
+hardware. A watchface is on-screen constantly, so registering it means
+continuous HR measurement for as long as the face is active. No stock face does
+this, and the symptom the user notices is battery drain, not anything visible.
+
+Use `onLastChange` + `getLast()` instead. That reports the watch's own
+automatic monitoring, which runs anyway at whatever cadence the user picked in
+the health settings, and costs nothing extra. The tradeoff is honest and worth
+stating to whoever asked for the face: BPM then refreshes on the watch's
+schedule (typically 1–10 minutes) rather than continuously.
+
+Check the doc comment before registering *any* sensor listener. `Stress.onChange`,
+`Step.onChange` and `Battery.onChange` are all genuinely passive; the HR one is
+the exception, and nothing in the method name distinguishes them.
+
+Polling frequency is a separate question and a much smaller one: a `createSysTimer`
+re-reading cached values every 30 s is a memory read, not a measurement.
 
 ### Current temperature
 
