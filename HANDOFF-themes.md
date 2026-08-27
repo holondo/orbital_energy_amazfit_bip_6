@@ -1,4 +1,4 @@
-> **Done.** This handoff was carried out in the original session — four themes
+> **Done.** This handoff was carried out in the original session — six themes
 > (Aurora, Sand, Graphite, Blossom) ship as of the 2026-08-26 build. It is kept
 > for the reasoning; the current state is described in `README.md` under
 > "Temas" and in the skill's §5.

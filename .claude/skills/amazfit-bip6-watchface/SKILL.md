@@ -415,7 +415,7 @@ theme decides whether that is magenta or tan. A palette keyed `pink` holding a
 brown is how a themes pass turns into a rename marathon. Keep an explicit
 `ROLES` list and fail the build when a theme misses one or invents one — a
 missing role surfaces as a pink element inside a beige theme, which is easy to
-miss by eye across four themes and 500 assets.
+miss by eye across six themes and 700 assets.
 
 **Parameterise anything generated.** A dial whose ring sweeps hue with position
 should not become 36 hard-coded colours per theme; give each theme the sweep

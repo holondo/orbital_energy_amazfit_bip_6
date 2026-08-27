@@ -222,6 +222,75 @@ const THEMES = [
       aodText: '#c8c8d8',
     },
   },
+  {
+    // Cherry blossom: the whole face in one pastel, the way the reference had
+    // it, with the surfaces a warm plum rather than the usual blue-black. The
+    // battery breaks the monochrome with wisteria — the flower that blooms
+    // alongside sakura — because a battery gauge in the same tone as every
+    // other reading stops being a gauge.
+    id: 5,
+    key: 't5',
+    name: 'Sakura',
+    ring: { hue: 350, spread: 20, sat: 30, light: 80, lightQuarter: 90, zero: '#fff0f2' },
+    minRing: { sat: 22, light: 72, zero: '#f0d8dc' },
+    C: {
+      bg: '#000000',
+      primary: '#f1a7b1',
+      marker: '#f3b2ba',
+      markerFill: '#241419',
+      accent: '#c3a6e0',
+      accentDim: '#3b2f4d',
+      iconDistance: '#e0a3c4',
+      iconSteps: '#f2b8bd',
+      iconDate: '#cfa8c8',
+      white: '#fff4f5',
+      label: '#f7dfe2',
+      chip: '#1e1418',
+      tileBg: '#2b1c22',
+      tileEdge: '#4a3038',
+      pillBg: '#33222a',
+      pillEdge: '#553a44',
+      pillDiv: '#75505c',
+      barTrack: '#4a3038',
+      aodDim: '#5a5a6e',
+      aodFaint: '#33333f',
+      aodText: '#c8c8d8',
+    },
+  },
+  {
+    // Urucum: the annatto seed, a red so saturated it reads orange. Labels go
+    // cream rather than white — against this red a true white looks blue. The
+    // accent is amber rather than the usual contrasting hue, so the battery
+    // stays an ember instead of fighting the face.
+    id: 6,
+    key: 't6',
+    name: 'Urucum',
+    ring: { hue: 25, spread: 16, sat: 45, light: 82, lightQuarter: 92, zero: '#fff2e0' },
+    minRing: { sat: 34, light: 74, zero: '#e8ccae' },
+    C: {
+      bg: '#000000',
+      primary: '#ee3c10',
+      marker: '#f04a18',
+      markerFill: '#180703',
+      accent: '#eda52b',
+      accentDim: '#4a3208',
+      iconDistance: '#e07a3c',
+      iconSteps: '#f28c4a',
+      iconDate: '#c96a30',
+      white: '#f7e8d4',
+      label: '#f3ddc4',
+      chip: '#170a06',
+      tileBg: '#2a0e06',
+      tileEdge: '#5e2410',
+      pillBg: '#331208',
+      pillEdge: '#6b2a12',
+      pillDiv: '#8d3b1c',
+      barTrack: '#5e2410',
+      aodDim: '#5a5a6e',
+      aodFaint: '#33333f',
+      aodText: '#c8c8d8',
+    },
+  },
 ]
 
 /** Fails loudly rather than letting a theme quietly miss or invent a role. */
