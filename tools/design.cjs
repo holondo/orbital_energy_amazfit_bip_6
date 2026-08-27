@@ -12,6 +12,50 @@
 const W = 390
 const H = 450
 
+/**
+ * The display's physical corner radius.
+ *
+ * Nothing on a development machine reports this. `getDeviceInfo()` has no
+ * radius field; `getAppWidgetSize()` does but lives on the `hmUI` global this
+ * firmware does not have; and the simulator draws the screen as a plain
+ * rectangle, so its own resources do not encode it either. It is therefore a
+ * measured-by-eye tunable.
+ *
+ * Err large rather than small. Over-rounding leaves a hairline of background
+ * between the card and the screen edge, which is invisible on an AMOLED that
+ * is already black there. Under-rounding clips the corner off the card.
+ */
+const SCREEN_R = 56
+
+/**
+ * The one knob. Everything else on the face is derived from it.
+ *
+ * The dial's footprint is a disc, and everything that is not the dial lives in
+ * an L — a column down the left edge, bars across the bottom. The largest disc
+ * that fits the rectangle the L leaves has radius
+ *
+ *   R = min(W - COL_W, BAR_TOP) / 2
+ *
+ * so the column width and the bar height are set from R rather than chosen,
+ * which keeps either from wasting room the other could have used.
+ *
+ * Raising R costs column width at 2px for every 1px of radius, so what the
+ * column is asked to hold decides how big the dial can be. The column's width
+ * is set by its widest reading, and the bars below have 390px to spend for
+ * free — so every reading wider than three digits belongs in a bar, not the
+ * column. Keeping "4505" and "THU 27" in the column capped R at 148 and forced
+ * the readings down to 25pt; moving them out reaches 164 with the readings back
+ * at full size.
+ */
+const DIAL_R = 164
+
+/** Transparent padding around a marker circle, for its glow. */
+const MARKER_GLOW = 2
+
+const COL_W = W - 2 * DIAL_R // left column width
+const BAR_TOP = 2 * DIAL_R // first pixel row belonging to the bottom bars
+const GAP = 8 // between cards, everywhere
+
 // ---------------------------------------------------------------- palette --
 //
 // Colours are referenced by ROLE, never by hue: a slot asks for `primary`, and
@@ -207,26 +251,29 @@ const themeByKey = (key) => THEMES.filter((t) => t.key === key)[0] || THEMES[0]
 // so the hour marker's inner edge must clear the minute marker's outer edge.
 // checkGeometry() below enforces it at asset-build time.
 const DIAL = {
-  cx: 252,
-  cy: 140,
-  rHour: 119, // radius of the 24 hour markers
-  rMin: 43, // radius of the 12 minute markers
-  hourChipR: 13.5, // faint disc behind each hour number
-  minChipR: 11,
-  hourFont: 16,
-  minFont: 12,
+  // Tangent to the top and right edges, and to the L on the other two sides.
+  cx: W - DIAL_R,
+  cy: DIAL_R,
+  rHour: 144, // radius of the 24 hour markers
+  rMin: 52, // radius of the 12 minute markers
+  hourChipR: 16, // faint disc behind each hour number
+  minChipR: 13,
+  hourFont: 18,
+  minFont: 14,
 
   // The dial's footprint is a disc of radius rHour + hourOverhang, so it can sit
   // tangent to the top and right edges however round the display corners are:
   // eroding a rounded rect by a radius at least as large as the corner radius
-  // leaves a plain rectangle. Only the tiles at x<=112 and the middle row at
-  // y=280 actually constrain it, and the horizontal side binds first at 136.
-  hourOverhang: 17, // how far past the hour ring the marker reaches
-  minOverhang: 13,
-  hlHourR: 40,
-  hlMinR: 28,
-  hlHourBox: 84, // sprite size (marker + glow)
-  hlMinBox: 60,
+  // leaves a plain rectangle. hourOverhang is derived so that DIAL_R is the
+  // outermost pixel of the marker *sprite*, glow included — not of the circle
+  // inside it. Measuring to the circle instead put the sprite box 2px off the
+  // right edge at 06:00 and 2px above it at 00:00.
+  hourOverhang: DIAL_R - 144 - MARKER_GLOW,
+  minOverhang: 15,
+  hlHourR: 47,
+  hlMinR: 33,
+  hlHourBox: 2 * (47 + MARKER_GLOW), // sprite size (marker + glow)
+  hlMinBox: 2 * (33 + MARKER_GLOW),
   // The marker digits are set in Instrument Serif, vendored in tools/fonts/.
   // Only the generator needs it: the markers ship as PNG sprites, so the watch
   // never has to resolve the font.
@@ -264,7 +311,7 @@ const DIAL = {
  * fault that made the minute appear to freeze. WIDGET_DELEGATE's resume_call
  * now redraws everything on wake, so the size is free again.
  */
-const MAX_SPRITE = 88
+const MAX_SPRITE = 104
 
 DIAL.hlHourCentre = DIAL.rHour + DIAL.hourOverhang - DIAL.hlHourR
 DIAL.hlMinCentre = DIAL.rMin + DIAL.minOverhang - DIAL.hlMinR
@@ -275,14 +322,95 @@ DIAL.hlMinFont = Math.floor(2 * DIAL.hlMinR * DIAL.markerFontRatio)
 
 // ---------------------------------------------------------------- tiles ----
 const TILE = {
-  r: 18,
-  pad: 9,
-  iconSize: 20,
-  labelDx: 32,
-  labelSize: 14,
-  labelDy: 20, // centre line of the icon + label row
-  valueDy: 24, // distance from the tile's bottom edge to the value centre
+  r: 18, // inner corners — the ones that do not meet the screen
+  pad: 6,
+  iconSize: 18,
+  labelDx: 28,
+  labelSize: 13,
+  labelDy: 19, // centre line of the icon + label row
+  valueDy: 22, // distance from the tile's bottom edge to the value centre
 }
+
+/**
+ * The column reads right-aligned.
+ *
+ * The screen's corner arc eats the *left* of a card, so anchoring the readings
+ * to the right edge puts them where the glass is, whatever the corner radius
+ * turns out to be — a left-aligned value in a 62px card is the first thing to
+ * be clipped, and was. The icon still sits at the padding on the label row,
+ * which is high enough up the arc to be safe and keeps the column's icons in
+ * a straight line.
+ */
+const COL_LABEL_SIZE = 12
+const COL_ICON_SIZE = 14
+
+/**
+ * Corner radii for a box, clockwise from top-left.
+ *
+ * A corner sitting in a screen corner takes the display's radius so the card
+ * follows the glass; every other corner takes the normal tile radius. Derived
+ * from the box's own position rather than hand-listed, so moving a card cannot
+ * leave a stale radius behind.
+ */
+function corners(box, innerR) {
+  const r = innerR === undefined ? TILE.r : innerR
+  const left = box.x <= 0
+  const right = box.x + box.w >= W
+  const top = box.y <= 0
+  const bottom = box.y + box.h >= H
+  return [
+    left && top ? SCREEN_R : r,
+    right && top ? SCREEN_R : r,
+    right && bottom ? SCREEN_R : r,
+    left && bottom ? SCREEN_R : r,
+  ]
+}
+
+/**
+ * Smallest x at which a row sitting `TILE.labelDy` from the top of a card in a
+ * screen corner is fully inside that card. Solved from the corner arc rather
+ * than eyeballed, so changing SCREEN_R moves the content with it.
+ */
+const ARC_SAFE_X = Math.ceil(
+  SCREEN_R -
+    Math.sqrt(
+      Math.max(0, SCREEN_R * SCREEN_R - Math.pow(SCREEN_R - TILE.labelDy + TILE.iconSize / 2, 2))
+    )
+)
+
+/**
+ * Is this point on the glass? The screen is a rounded rect, so a point can be
+ * inside the 390x450 framebuffer and still be under the bezel.
+ *
+ * Card artwork may legitimately sit outside — its own corner is arced to match.
+ * Readings may not: a value that leaves this region is simply missing on the
+ * watch, and reads as a font bug rather than a layout one.
+ */
+function insideScreen(x, y) {
+  const dx = x < SCREEN_R ? SCREEN_R - x : x > W - SCREEN_R ? x - (W - SCREEN_R) : 0
+  const dy = y < SCREEN_R ? SCREEN_R - y : y > H - SCREEN_R ? y - (H - SCREEN_R) : 0
+  return dx * dx + dy * dy <= SCREEN_R * SCREEN_R
+}
+
+/**
+ * Lowest y at which content sitting at x=TILE.pad is inside a card that fills
+ * the screen's top-left corner. The arc eats the corner from the inside, so
+ * the first card is taller than the others by exactly this much rather than
+ * having its label hang outside the card.
+ */
+const ARC_SAFE_Y = Math.ceil(
+  SCREEN_R - Math.sqrt(Math.max(0, SCREEN_R * SCREEN_R - Math.pow(SCREEN_R - TILE.pad, 2)))
+)
+
+// The column: flush with the top of the screen, stopping one gap short of the
+// bars. Card 0 absorbs the corner arc; the other three split what is left.
+const COL_H = BAR_TOP - GAP
+const CARD_0_H = ARC_SAFE_Y + COL_LABEL_SIZE + 40
+const CARD_H = Math.floor((COL_H - CARD_0_H - 3 * GAP) / 3)
+const cardY = (i) => (i === 0 ? 0 : CARD_0_H + GAP + (i - 1) * (CARD_H + GAP))
+const cardH = (i) => (i === 0 ? CARD_0_H : CARD_H)
+// Card 0's rows sit low enough to clear the arc; the rest use the normal offsets.
+const cardLabelDy = (i) => (i === 0 ? ARC_SAFE_Y + COL_LABEL_SIZE : TILE.labelDy)
 
 const tileLabelY = (box) => box.y + TILE.labelDy
 const tileValueY = (box) => box.y + box.h - TILE.valueDy
@@ -291,60 +419,81 @@ const tileValueY = (box) => box.y + box.h - TILE.valueDy
  * Every metric cell on the face: where it sits, how it is drawn, and which
  * system app a tap on it opens. Tap targets are the whole tile.
  */
+const BATTERY_H = 50 // one row: bolt, reading, wave — no label line above them
+const PILL_H = H - BAR_TOP - BATTERY_H - GAP
+
+/**
+ * Every metric cell on the face: where it sits, how it is drawn, and which
+ * system app a tap on it opens. Tap targets are the whole tile.
+ *
+ * Readings are placed by *width*, not by topic. The four in the column are the
+ * ones that never exceed three characters, which is what lets the column be
+ * 62px wide and the dial 164. Anything wider — the date, the distance with its
+ * unit, five-digit step counts — goes into a bar, where width is free.
+ */
 const SLOTS = [
   {
     key: 'hr',
-    box: { x: 12, y: 28, w: 100, h: 78 },
+    align: 'right',
     icon: 'heart',
     iconColor: 'primary',
-    meter: { name: 'hr', dx: 32, dy: 11, w: 59, h: 14 }, // zone bar, replaces the label
+    box: { x: 0, y: cardY(0), w: COL_W, h: cardH(0) },
+    label: 'HR',
+    labelColor: 'primary',
+    labelDy: cardLabelDy(0),
     value: { size: 28, color: 'primary', w: 50 },
-    unit: { text: 'BPM', color: 'white', size: 13, dx: 60, w: 38 },
     dataType: 'HEART',
     app: 'HR',
   },
   {
-    key: 'distance',
-    box: { x: 12, y: 112, w: 100, h: 78 },
-    icon: 'pin',
-    iconColor: 'iconDistance',
-    label: 'Distance',
-    value: { size: 28, color: 'primary', w: 57 },
-    unit: { text: 'KM', color: 'iconDistance', size: 13, dx: 67, w: 32 },
-    dataType: 'DISTANCE',
-    app: 'STATUS',
-  },
-  {
-    key: 'steps',
-    box: { x: 12, y: 196, w: 100, h: 78 },
-    icon: 'steps',
+    key: 'stress',
+    align: 'right',
+    icon: 'gauge',
     iconColor: 'iconSteps',
-    label: 'Steps',
-    value: { size: 28, color: 'primary', w: 82 },
-    dataType: 'STEP',
-    app: 'STATUS',
+    box: { x: 0, y: cardY(1), w: COL_W, h: cardH(1) },
+    label: 'Stress',
+    labelColor: 'iconSteps',
+    labelDy: cardLabelDy(1),
+    value: { size: 28, color: 'primary', w: 50 },
+    dataType: 'STRESS',
+    app: 'PRESSURE',
   },
   {
-    key: 'date',
-    // squared off with the column above it, which hands the width to the battery
-    box: { x: 12, y: 280, w: 100, h: 68 },
-    icon: 'calendar',
+    key: 'pai',
+    align: 'right',
+    icon: 'flame',
+    iconColor: 'iconDistance',
+    box: { x: 0, y: cardY(2), w: COL_W, h: cardH(2) },
+    label: 'PAI',
+    labelColor: 'iconDistance',
+    labelDy: cardLabelDy(2),
+    value: { size: 28, color: 'primary', w: 50 },
+    dataType: 'PAI_DAILY',
+    app: 'PAI',
+  },
+  {
+    key: 'temp',
+    align: 'right',
+    icon: 'thermometer',
     iconColor: 'iconDate',
-    label: 'Date',
-    // 'WED 26' measures 82px on the device at size 24 — exactly the content
-    // width, which is what set the marquee off. One size down plus a box that
-    // runs past the nominal padding gives it real slack.
-    value: { size: 23, color: 'primary', w: 88 },
-    app: 'CALENDAR',
+    box: { x: 0, y: cardY(3), w: COL_W, h: cardH(3) },
+    label: 'Temp',
+    labelColor: 'iconDate',
+    labelDy: cardLabelDy(3),
+    value: { size: 28, color: 'primary', w: 50 },
+    dataType: 'WEATHER_CURRENT',
+    app: 'WEATHER',
   },
   {
+    // One row. The label line came off and the bolt moved beside the reading,
+    // which is 23px of height that went straight into the dial's radius.
     key: 'battery',
-    box: { x: 118, y: 280, w: 262, h: 68 },
+    box: { x: 0, y: BAR_TOP, w: W, h: BATTERY_H },
     icon: 'bolt',
     iconColor: 'accent',
-    label: 'Battery',
-    meter: { name: 'battery', dx: 62, dy: 31, w: 191, h: 26 }, // sits beside the reading
-    value: { size: 28, color: 'accent', w: 50 },
+    inlineIcon: true,
+    meter: { name: 'battery', dx: 104, dy: Math.round((BATTERY_H - 22) / 2), w: 274, h: 22 },
+    value: { size: 28, color: 'accent', w: 56, dx: 32 },
     dataType: 'BATTERY',
     app: 'SETTING',
   },
@@ -362,9 +511,31 @@ function checkGeometry() {
       throw new Error(`${name} is ${box}px; the watch truncates moving sprites above ${MAX_SPRITE}px`)
     }
   }
-  if (2 * (DIAL.hlHourR + 2) > DIAL.hlHourBox || 2 * (DIAL.hlMinR + 2) > DIAL.hlMinBox) {
+  if (
+    2 * (DIAL.hlHourR + MARKER_GLOW) > DIAL.hlHourBox ||
+    2 * (DIAL.hlMinR + MARKER_GLOW) > DIAL.hlMinBox
+  ) {
     throw new Error('a marker plus its glow does not fit inside its sprite box')
   }
+  // The sprite box, not the circle, is what the runtime places — so it is the
+  // box that has to stay on screen at the four extreme positions.
+  const reach = DIAL.hlHourCentre + DIAL.hlHourBox / 2
+  for (const [side, room] of [
+    ['right', W - DIAL.cx],
+    ['left', DIAL.cx - COL_W],
+    ['top', DIAL.cy],
+    ['bottom', BAR_TOP - DIAL.cy],
+  ]) {
+    if (reach > room) {
+      throw new Error(`hour marker sprite runs ${reach - room}px past the ${side} limit`)
+    }
+  }
+  const aodReach = AOD.rHour + DIAL.hlHourBox / 2
+  const aodRoom = Math.min(AOD.cx, AOD.cy, W - AOD.cx, H - AOD.cy)
+  if (aodReach > aodRoom) {
+    throw new Error(`AOD hour ring runs ${aodReach - aodRoom}px off screen`)
+  }
+
   return gap
 }
 
@@ -377,25 +548,58 @@ const METER_STEPS = 21 // 0%, 5% … 100%
 
 // ---------------------------------------------------------------- pill -----
 const PILL = {
-  x: 12,
-  y: 356,
-  w: 368,
-  h: 68,
-  r: 34,
+  x: 0,
+  y: BAR_TOP + BATTERY_H + GAP,
+  w: W,
+  h: PILL_H,
+  // Only the corners that do not meet the screen: the bottom two take SCREEN_R
+  // from corners(). Kept near half-height so the bar still reads as a stadium.
+  r: 30,
   labelSize: 15,
-  valueSize: 28,
+  valueSize: 24,
   divInset: 16,
+  cellPad: 16, // breathing room each cell gets on top of its reading
+  // The wide readings, where 390px of bar makes their width free. `flex` sizes
+  // each cell to its own content — the date needs half again what a bare number
+  // does, and equal cells would either clip it or waste the rest.
+  // `w` is the reading's own width at valueSize, measured on the device for the
+  // worst case it can show. Cell widths are derived from it, so a cell can
+  // never end up narrower than the number it has to hold.
   cells: [
-    { key: 'temp', label: 'Temp', dataType: 'WEATHER_CURRENT', app: 'WEATHER' },
-    { key: 'kcal', label: 'Kcal', dataType: 'CAL', app: 'STATUS' },
-    { key: 'stress', label: 'Stress', dataType: 'STRESS', app: 'PRESSURE' },
-    { key: 'pai', label: 'PAI', dataType: 'PAI_DAILY', app: 'PAI' },
+    { key: 'date', label: 'Date', app: 'CALENDAR', w: 92 },
+    { key: 'distance', label: 'Dist KM', dataType: 'DISTANCE', app: 'STATUS', w: 50 },
+    { key: 'steps', label: 'Steps', dataType: 'STEP', app: 'STATUS', w: 70 },
+    { key: 'kcal', label: 'Kcal', dataType: 'CAL', app: 'STATUS', w: 70 },
   ],
 }
 
-const cellW = PILL.w / PILL.cells.length
-const cellCenter = (i) => Math.round(PILL.x + cellW * (i + 0.5))
-const cellDivider = (i) => Math.round(PILL.x + cellW * (i + 1)) // i = 0..2
+/**
+ * The bar's artwork runs to the screen edge; its readings do not.
+ *
+ * At the height of the value row the glass has already curved inwards, so the
+ * cells are laid out across an inset span. Derived from the arc at the lowest
+ * ink rather than picked, so it tracks SCREEN_R.
+ */
+const PILL_INK_BOTTOM = PILL.y + PILL.h - TILE.valueDy + PILL.valueSize * 0.65
+const PILL_INSET = Math.ceil(
+  SCREEN_R -
+    Math.sqrt(
+      Math.max(0, SCREEN_R * SCREEN_R - Math.pow(PILL_INK_BOTTOM - (H - SCREEN_R), 2))
+    )
+)
+
+const cellFlex = PILL.cells.map((c) => c.w + PILL.cellPad)
+const flexTotal = cellFlex.reduce((a, b) => a + b, 0)
+const cellSpan = PILL.w - 2 * PILL_INSET
+// Cumulative edges, rounded once and shared, so the cells tile the span exactly.
+const cellEdges = cellFlex.reduce(
+  (acc, f) => acc.concat(acc[acc.length - 1] + (f / flexTotal) * cellSpan),
+  [PILL.x + PILL_INSET]
+)
+const cellEdge = (i) => Math.round(cellEdges[i])
+const cellW = cellSpan / PILL.cells.length // kept for callers that want a nominal width
+const cellCenter = (i) => Math.round((cellEdges[i] + cellEdges[i + 1]) / 2)
+const cellDivider = (i) => cellEdge(i + 1) // i = 0..cells-2
 
 // --------------------------------------------------------------- AOD -------
 // Centred on the screen rather than inheriting the dial's top-right position,
@@ -406,7 +610,9 @@ const AOD = {
   // Roomier than the daytime dial — with the tiles gone there is space for it,
   // and the wider inner ring leaves the digital time an uncluttered middle.
   // The chips sit *on* their rings here instead of growing inwards.
-  rHour: 150,
+  // Bounded like the daytime dial: the marker *sprite* has to stay on screen,
+  // and it grew with DIAL_R. checkGeometry() asserts it.
+  rHour: 144,
   rMin: 82,
   hourDotR: 3,
   quarterDotR: 4.2,
@@ -502,12 +708,36 @@ const ICONS = {
   stand:
     '<g><circle cx="12" cy="3.4" r="2.5"/>' +
     '<path d="M12 6.6c-2.1 0-3.4 1-3.9 2.8L6.6 15c-.2.8.2 1.5 1 1.7.8.2 1.5-.2 1.7-1l.9-3.2v2.9l-1.7 5.7c-.2.9.2 1.6 1 1.8.9.2 1.6-.2 1.8-1l1.2-4.3h.1l1.2 4.3c.2.9 1 1.3 1.8 1 .9-.2 1.3-1 1-1.8l-1.7-5.7v-2.9l.9 3.2c.2.8 1 1.2 1.7 1 .8-.2 1.2-.9 1-1.7l-1.5-5.6c-.5-1.8-1.8-2.8-3.9-2.8z"/></g>',
+  // A droplet on a gauge arc: stress is scored, not counted.
+  thermometer:
+    '<g><path d="M14.5 13.6V4.9a2.5 2.5 0 0 0-5 0v8.7a4.8 4.8 0 1 0 5 0z"/>' +
+    '<circle cx="12" cy="17.4" r="2.6" fill="none"/></g>',
+  // A flame — PAI is earned by effort, not distance.
+  flame:
+    '<path d="M12.6 1.8c.6 3-1 4.4-2.5 5.9C8.4 9.3 6.8 11 6.8 14a5.2 5.2 0 0 0 10.4 0c0-1.4-.5-2.4-1.2-3.4-.3.9-1 1.6-1.9 1.6 1-3.6-.4-8-1.5-10.4z"/>',
+  // A dial with a needle: a stress score, not a count.
+  gauge:
+    '<g><path d="M12 4.2a9 9 0 0 0-9 9 8.9 8.9 0 0 0 1.5 5 1.4 1.4 0 0 0 1.2.6h12.6a1.4 1.4 0 0 0 1.2-.6 8.9 8.9 0 0 0 1.5-5 9 9 0 0 0-9-9zm0 3.4a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6z" fill="none" stroke-width="2" stroke="currentColor"/>' +
+    '<path d="M12 4.6a8.6 8.6 0 0 0-8.6 8.6c0 1.7.5 3.3 1.4 4.7h2.5a6.2 6.2 0 1 1 9.4 0h2.5a8.5 8.5 0 0 0 1.4-4.7A8.6 8.6 0 0 0 12 4.6z"/>' +
+    '<path d="M15.6 9.4 11 13a1.5 1.5 0 1 0 2 2z"/></g>',
   bolt: '<path d="M13.8 1.5 4.4 13.2c-.4.5 0 1.3.7 1.3h4.3l-1.5 8c-.1.8.9 1.3 1.4.6l9.4-11.7c.4-.5 0-1.3-.7-1.3h-4.3l1.5-8c.2-.8-.9-1.3-1.4-.6z"/>',
 }
 
 module.exports = {
   W,
   H,
+  SCREEN_R,
+  DIAL_R,
+  COL_W,
+  BAR_TOP,
+  GAP,
+  CARD_H,
+  CARD_0_H,
+  COL_LABEL_SIZE,
+  COL_ICON_SIZE,
+  ARC_SAFE_Y,
+  corners,
+  insideScreen,
   ROLES,
   THEMES,
   themeByKey,
@@ -524,8 +754,10 @@ module.exports = {
   tileLabelY,
   tileValueY,
   cellW,
+  cellEdge,
   cellCenter,
   cellDivider,
+  PILL_INSET,
   polar,
   hsl,
   ringHue,

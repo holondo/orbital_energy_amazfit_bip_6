@@ -668,7 +668,80 @@ others, and find the handle by enumerating windows for the title
 
 ---
 
-## 10. Layout notes for 390 x 450
+## 10. Filling the screen: the L-shape layout
+
+To make a round dial as large as possible, put everything that is not the dial
+into an L — a column down one edge, bars across the bottom — and give the dial
+the largest disc that fits the rectangle the L leaves:
+
+    R = min(W - COL_W, BAR_TOP) / 2
+
+Drive the whole layout from R. Set `COL_W = W - 2R` and `BAR_TOP = 2R` rather
+than choosing them, so neither side wastes room the other could use. The
+exchange rate is brutal and worth stating up front: **1px of dial radius costs
+2px of column width**. On a 390-wide screen, going from R=136 to R=148 takes
+the column from 112 to 94 and the readings from 28pt to 25pt.
+
+Measure the trade before committing to it. Take the worst-case string for every
+column card ("180", "3.50", "4505"), scale its measured device width by the
+font size, add padding and units, and print a table of R against the largest
+type that still fits. Most of the win is usually free: deleting a 12px outer
+margin bought 9px of radius here at no cost to anything.
+
+### The dial is a disc, so corners are free
+
+A disc tangent to the top and right edges never reaches either corner — eroding
+a rounded rect by a radius at least as large as its corner radius leaves a plain
+rectangle. At R=148 on this screen the top-right corner sits 60px outside the
+disc. So the dial can be flush with the edges however round the glass is; only
+the L has to care about the corner radius.
+
+### Bound R by the sprite, not by the circle
+
+The runtime places the marker's *sprite box*, which is the circle plus its glow
+padding. Deriving the dial's footprint from the circle put the box 2px off the
+right edge at 06:00 and 2px above it at 00:00 — invisible in a normal-mode
+render, because the only clipped pixels are transparent. Make R the outermost
+pixel of the box and assert it at build time against all four limits.
+
+### Content near a screen corner needs solving, not eyeballing
+
+A card in a screen corner has its own radius set to the display's, and that arc
+eats the corner from the inside. With a 56px radius, a card at x=0,y=0 does not
+begin until y=31 at x=6 — so an icon on the label row hangs outside the card
+entirely, while the value 20px lower is fine.
+
+Derive the safe inset from the arc instead of nudging until it looks right:
+
+```js
+const ARC_SAFE_X = Math.ceil(
+  SCREEN_R - Math.sqrt(SCREEN_R ** 2 - (SCREEN_R - rowCentreY) ** 2)
+)
+```
+
+Then either start that row at `ARC_SAFE_X`, or drop the element. Here the
+heart icon came off the top-left card — the zone bar and the "BPM" unit already
+identified the reading — and the bar started at `ARC_SAFE_X`. Check the corner
+at a zoom of 3x or more; at 1x an element hanging 5px outside its card reads as
+a rendering artefact rather than a layout bug.
+
+### You cannot look up the screen's corner radius
+
+Not from the device (`getDeviceInfo()` has no radius field), not from the
+runtime (`getAppWidgetSize()` returns one but hangs off the `hmUI` global this
+firmware lacks), and not from the simulator, which draws the screen as a plain
+rectangle and therefore never encodes it. Screenshots do not settle it either:
+chat and preview surfaces round image corners themselves, which reads exactly
+like a device mask.
+
+Make it one named constant and err large. Over-rounding leaves a hairline of
+background between card and glass, invisible on an AMOLED that is already black
+there; under-rounding clips the card. Confirm it against a photo of the real
+watch before calling the layout finished.
+
+---
+
+## 11. Layout notes for 390 x 450
 
 - Corner radius ~45 px. A point needs the corner check only when
   `x > 390 - R` **and** `y < R` (and the mirrored cases).
@@ -694,7 +767,7 @@ others, and find the handle by enumerating windows for the title
 
 ---
 
-## 11. Order of work
+## 12. Order of work
 
 1. Get `zeus status` green (login + simulator connected) and the emulator
    **started**, not just open.
@@ -709,7 +782,7 @@ others, and find the handle by enumerating windows for the title
 7. For anything visual that is wrong on hardware, diff a screenshot rather than
    guessing.
 
-## 12. Symptom index
+## 13. Symptom index
 
 | Symptom | Cause |
 | --- | --- |

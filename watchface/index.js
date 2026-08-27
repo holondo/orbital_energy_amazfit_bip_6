@@ -328,6 +328,13 @@ WatchFace({
         })
       }
 
+      // Temperature has no sensor and has to come from the data binding, so it
+      // is a TEXT_IMG wherever it happens to sit — column card or pill cell.
+      if (slot.key === 'temp') {
+        this.buildTemperature(slot, slot.value.align === 'right' ? align.RIGHT : align.LEFT)
+        continue
+      }
+
       this.widgets[slot.key] = this.makeText({
         x: slot.value.x,
         y: slot.value.y,
@@ -335,6 +342,7 @@ WatchFace({
         h: slot.value.h,
         text_size: slot.value.size,
         color: this.theme.color[slot.value.color],
+        align_h: slot.value.align === 'right' ? align.RIGHT : align.LEFT,
       })
 
       if (slot.unit) {
@@ -353,7 +361,7 @@ WatchFace({
     for (let i = 0; i < PILL_CELLS.length; i += 1) {
       const cell = PILL_CELLS[i]
       if (cell.key === 'temp') {
-        this.buildTemperature(cell)
+        this.buildTemperature(cell, align.CENTER_H)
       } else {
         this.widgets[cell.key] = this.makeText({
           x: cell.value.x,
@@ -372,7 +380,7 @@ WatchFace({
    * is the watchface data binding, which renders from an image font. If that
    * binding is unavailable the cell simply stays blank rather than throwing.
    */
-  buildTemperature(cell) {
+  buildTemperature(cell, alignH) {
     try {
       this.widgets.temp = createWidget(widget.TEXT_IMG, {
         x: cell.value.x,
@@ -387,7 +395,7 @@ WatchFace({
         negative_image: TEMP_NEGATIVE(this.theme.key),
         invalid_image: TEMP_INVALID(this.theme.key),
         h_space: 0,
-        align_h: align.CENTER_H,
+        align_h: alignH,
         align_v: align.CENTER_V,
         show_level: LV_NORMAL,
       })

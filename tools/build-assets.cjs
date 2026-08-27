@@ -110,6 +110,13 @@ const round = (n) => Math.round(n * 100) / 100
 
 /** Places a 24x24 icon path at (x, y) scaled to `size`. */
 function icon(name, x, y, size, color) {
+  // NaN in an SVG transform is not an error — resvg reads it as 0 and silently
+  // stacks everything in the top-left corner. An undefined size did exactly
+  // that here, so every coordinate is checked before it can go quiet.
+  if (!isFinite(x) || !isFinite(y) || !isFinite(size)) {
+    throw new Error(`icon(${name}) got a non-finite placement: ${x},${y} size ${size}`)
+  }
+  if (!D.ICONS[name]) throw new Error(`icon(${name}) is not in ICONS`)
   const s = size / 24
   let body =
     `<g transform="translate(${round(x)} ${round(y)}) scale(${round(s)})" fill="${color}">` +
@@ -156,6 +163,28 @@ function dialLayer(cx, cy) {
   return out
 }
 
+/**
+ * Rounded rect with a radius per corner, clockwise from top-left.
+ *
+ * `rx` cannot express this, and the whole point of the L is that the corners
+ * meeting the screen are rounded differently from the ones facing the dial.
+ */
+function roundedRect(box, radii, attrs) {
+  const [tl, tr, br, bl] = radii
+  const { x, y, w, h } = box
+  const d =
+    `M${x + tl},${y}` +
+    `H${x + w - tr}` + (tr ? `A${tr},${tr} 0 0 1 ${x + w},${y + tr}` : '') +
+    `V${y + h - br}` + (br ? `A${br},${br} 0 0 1 ${x + w - br},${y + h}` : '') +
+    `H${x + bl}` + (bl ? `A${bl},${bl} 0 0 1 ${x},${y + h - bl}` : '') +
+    `V${y + tl}` + (tl ? `A${tl},${tl} 0 0 1 ${x + tl},${y}` : '') +
+    'Z'
+  return `<path d="${d}" ${attrs}/>`
+}
+
+/** Draw the corner-calibration card instead of the face. See calibrationSvg(). */
+const CALIB = process.env.CALIB === '1'
+
 // ----------------------------------------------------------------- tiles ---
 
 function tiles() {
@@ -164,25 +193,40 @@ function tiles() {
   for (const slot of D.SLOTS) {
     const box = slot.box
 
-    out +=
-      `<rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" rx="${D.TILE.r}" ` +
-      `fill="${T.C.tileBg}" stroke="${T.C.tileEdge}" stroke-width="1"/>`
-
-    out += icon(
-      slot.icon,
-      box.x + D.TILE.pad,
-      box.y + D.TILE.labelDy - D.TILE.iconSize / 2,
-      D.TILE.iconSize,
-      T.C[slot.iconColor]
+    out += roundedRect(
+      box,
+      D.corners(box),
+      `fill="${T.C.tileBg}" stroke="${T.C.tileEdge}" stroke-width="1"`
     )
 
+    if (slot.icon) {
+      // inlineIcon sits on the value's line rather than on a label row of its
+      // own — that row is what the battery bar gave up to shorten itself.
+      const size = slot.align === 'right' ? D.COL_ICON_SIZE : D.TILE.iconSize
+      const rowY = slot.inlineIcon
+        ? D.tileValueY(box)
+        : box.y + (slot.labelDy === undefined ? D.TILE.labelDy : slot.labelDy)
+      out += icon(slot.icon, box.x + D.TILE.pad, rowY - size / 2, size, T.C[slot.iconColor])
+    }
+
     if (slot.label) {
-      out += text(box.x + D.TILE.labelDx, D.tileLabelY(box), slot.label, {
-        size: D.TILE.labelSize,
-        color: T.C.label,
-        weight: 600,
-        anchor: 'start',
-      })
+      // A card with no icon puts its label at the padding instead of past
+      // where the icon would have been, and carries the metric's colour there
+      // since it is the only thing identifying the reading.
+      const right = slot.align === 'right'
+      out += text(
+        right
+          ? box.x + box.w - D.TILE.pad
+          : box.x + (slot.icon ? D.TILE.labelDx : D.TILE.pad),
+        box.y + (slot.labelDy === undefined ? D.TILE.labelDy : slot.labelDy),
+        slot.label,
+        {
+          size: right ? D.COL_LABEL_SIZE : D.TILE.labelSize,
+          color: T.C[slot.labelColor || 'label'],
+          weight: 600,
+          anchor: right ? 'end' : 'start',
+        }
+      )
     }
 
     // Meters are drawn entirely by their own image strip at runtime; the
@@ -256,8 +300,11 @@ function meterFrame(name, pct) {
 
 function pillRow() {
   let out =
-    `<rect x="${D.PILL.x}" y="${D.PILL.y}" width="${D.PILL.w}" height="${D.PILL.h}" ` +
-    `rx="${D.PILL.r}" fill="${T.C.pillBg}" stroke="${T.C.pillEdge}" stroke-width="1"/>`
+    roundedRect(
+      D.PILL,
+      D.corners(D.PILL, D.PILL.r),
+      `fill="${T.C.pillBg}" stroke="${T.C.pillEdge}" stroke-width="1"`
+    )
 
   for (let i = 0; i < D.PILL.cells.length - 1; i += 1) {
     out +=
@@ -334,14 +381,19 @@ function hitSprite(w, h) {
 
 // ---------------------------------------------------------- temp digits ----
 
-const TEMP_GLYPH = { w: 17, h: 34 }
+// Sized from whichever slot actually shows the temperature — it moved from the
+// pill to the column and kept rendering at the pill's smaller size, which left
+// visible gaps between the digits.
+const TEMP_SLOT = D.SLOTS.filter((s) => s.key === 'temp')[0]
+const TEMP_SIZE = TEMP_SLOT ? TEMP_SLOT.value.size : D.PILL.valueSize
+const TEMP_GLYPH = { w: Math.round(TEMP_SIZE * 0.62), h: Math.round(TEMP_SIZE * 1.25) }
 
 function tempGlyph(ch, width) {
   const w = width || TEMP_GLYPH.w
   return svgDoc(
     w,
     TEMP_GLYPH.h,
-    text(w / 2, TEMP_GLYPH.h / 2, ch, { size: D.PILL.valueSize, color: T.C.primary, weight: 600 })
+    text(w / 2, TEMP_GLYPH.h / 2, ch, { size: TEMP_SIZE, color: T.C.primary, weight: 600 })
   )
 }
 
@@ -352,10 +404,83 @@ function backgroundSvg() {
     D.W,
     D.H,
     `<rect width="${D.W}" height="${D.H}" fill="${T.C.bg}"/>` +
-      dialLayer(D.DIAL.cx, D.DIAL.cy) +
-      tiles() +
-      pillRow()
+      (CALIB
+        ? calibrationSvg()
+        : dialLayer(D.DIAL.cx, D.DIAL.cy) + tiles() + pillRow())
   )
+}
+
+/**
+ * Corner-radius calibration card, drawn instead of the face when CALIB=1.
+ *
+ * The display's corner radius cannot be read from the device, the runtime or
+ * the simulator (see SKILL.md), and a screenshot cannot settle it either
+ * because preview surfaces round image corners themselves. The only way to
+ * measure it is to draw known geometry and photograph the glass.
+ *
+ * Each corner carries labelled quarter-arcs from 30px to 110px. Whichever arc
+ * disappears into the bezel is larger than the glass; the largest arc still
+ * fully visible is the radius, to within the 10px step. The 1px frame at the
+ * very edge reveals any inset applied to every side, and the edge ticks let a
+ * partial cut be counted rather than guessed.
+ */
+function calibrationSvg() {
+  const RADII = [30, 40, 50, 60, 70, 80, 90, 100, 110]
+  const HUES = ['#ff2d55', '#ff9500', '#ffe400', '#34ff5a', '#00e5ff', '#4d7bff', '#c76bff', '#ff5ec4', '#ffffff']
+  let out = ''
+
+  // A 1px frame on the outermost pixel row and column. Any side of it that is
+  // missing on the watch means the panel is inset there.
+  out += `<rect x="0.5" y="0.5" width="${D.W - 1}" height="${D.H - 1}" fill="none" stroke="#ffffff" stroke-width="1"/>`
+
+  // Ticks every 10px along all four edges, longer every 50px.
+  for (let x = 0; x <= D.W; x += 10) {
+    const len = x % 50 === 0 ? 14 : 7
+    out += `<rect x="${x}" y="0" width="1" height="${len}" fill="#8a8a8a"/>`
+    out += `<rect x="${x}" y="${D.H - len}" width="1" height="${len}" fill="#8a8a8a"/>`
+  }
+  for (let y = 0; y <= D.H; y += 10) {
+    const len = y % 50 === 0 ? 14 : 7
+    out += `<rect x="0" y="${y}" width="${len}" height="1" fill="#8a8a8a"/>`
+    out += `<rect x="${D.W - len}" y="${y}" width="${len}" height="1" fill="#8a8a8a"/>`
+  }
+
+  // One quarter-arc per radius in every corner, labelled on the diagonal.
+  const CORNERS = [
+    { cx: 0, cy: 0, sx: 1, sy: 1 },
+    { cx: D.W, cy: 0, sx: -1, sy: 1 },
+    { cx: D.W, cy: D.H, sx: -1, sy: -1 },
+    { cx: 0, cy: D.H, sx: 1, sy: -1 },
+  ]
+
+  RADII.forEach((r, i) => {
+    const colour = HUES[i]
+    for (const c of CORNERS) {
+      const x0 = c.cx
+      const y0 = c.cy + c.sy * r
+      const x1 = c.cx + c.sx * r
+      const y1 = c.cy
+      const sweep = c.sx * c.sy > 0 ? 1 : 0
+      out += `<path d="M${x0},${y0} A${r},${r} 0 0 ${sweep} ${x1},${y1}" fill="none" stroke="${colour}" stroke-width="2"/>`
+    }
+  })
+
+  // The legend lives in the middle of the screen, the one place nothing can be
+  // clipped — labelling the arcs at the corners would put the answer inside the
+  // region being measured.
+  out += text(D.W / 2, 150, 'WHICH COLOUR', { size: 18, color: '#ffffff', weight: 700, anchor: 'middle' })
+  out += text(D.W / 2, 172, 'follows the glass edge?', { size: 15, color: '#9a9a9a', anchor: 'middle' })
+
+  RADII.forEach((r, i) => {
+    const col = i % 3
+    const row = Math.floor(i / 3)
+    const x = 70 + col * 92
+    const y = 208 + row * 34
+    out += `<rect x="${x}" y="${y - 9}" width="26" height="4" rx="2" fill="${HUES[i]}"/>`
+    out += text(x + 34, y, String(r), { size: 17, color: HUES[i], weight: 700, anchor: 'start' })
+  })
+
+  return out
 }
 
 function aodSvg() {
@@ -391,7 +516,11 @@ function previewSvg(sample) {
     const box = slot.box
     const value = sample[slot.key]
 
-    out += text(box.x + D.TILE.pad, D.tileValueY(box), value, {
+    const valueRight = slot.align === 'right'
+    out += text(valueRight
+      ? box.x + box.w - D.TILE.pad
+      : box.x + (slot.value.dx === undefined ? D.TILE.pad : slot.value.dx), D.tileValueY(box), value, {
+      anchor: valueRight ? 'end' : 'start',
       size: slot.value.size,
       color: T.C[slot.value.color],
       weight: 700,
@@ -421,7 +550,7 @@ function previewSvg(sample) {
 
   D.PILL.cells.forEach((cell, i) => {
     out += text(D.cellCenter(i), D.PILL.y + D.PILL.h - D.TILE.valueDy, sample[cell.key], {
-      size: D.PILL.valueSize,
+      size: cell.size || D.PILL.valueSize,
       color: T.C.primary,
       weight: 700,
     })
@@ -482,9 +611,14 @@ function emitLayout() {
     app: slot.app,
     tap: Object.assign({ src: hitName(slot.box.w, slot.box.h) }, slot.box),
     value: {
-      x: slot.box.x + D.TILE.pad,
+      align: slot.align || 'left',
+      x: slot.box.x + (slot.align === 'right'
+        ? D.TILE.pad
+        : slot.value.dx === undefined
+          ? D.TILE.pad
+          : slot.value.dx),
       y: Math.round(D.tileValueY(slot.box)) - 18,
-      w: slot.value.w,
+      w: slot.align === 'right' ? slot.box.w - 2 * D.TILE.pad : slot.value.w,
       h: 36,
       size: slot.value.size,
       color: slot.value.color, // role name — the runtime resolves it per theme
@@ -512,25 +646,32 @@ function emitLayout() {
     dataType: slot.dataType || null,
   }))
 
-  const pillCells = D.PILL.cells.map((cell, i) => ({
-    key: cell.key,
-    app: cell.app,
-    dataType: cell.dataType || null,
-    tap: {
-      x: Math.round(D.PILL.x + D.cellW * i),
-      y: D.PILL.y,
-      w: Math.round(D.cellW),
-      h: D.PILL.h,
-      src: hitName(Math.round(D.cellW), D.PILL.h),
-    },
-    value: {
-      x: Math.round(D.cellCenter(i) - D.cellW / 2),
-      y: D.PILL.y + D.PILL.h - D.TILE.valueDy - 18,
-      w: Math.round(D.cellW),
-      h: 36,
-      size: D.PILL.valueSize,
-    },
-  }))
+  // Cell edges are rounded once and shared, so the cells tile the bar exactly
+  // instead of each rounding its own width and overrunning the last edge.
+  const edge = (i) => Math.round(D.PILL.x + D.cellW * i)
+
+  const pillCells = D.PILL.cells.map((cell, i) => {
+    // The tap zone spans the full bar height and tiles the whole width, but the
+    // value box is only as wide as its own content and centred in the cell —
+    // a box the width of the cell would reach into the screen's corner arc.
+    const tapX = i === 0 ? 0 : D.cellEdge(i)
+    const tapW = (i === D.PILL.cells.length - 1 ? D.W : D.cellEdge(i + 1)) - tapX
+    const size = cell.size || D.PILL.valueSize
+    const vw = cell.w
+    return {
+      key: cell.key,
+      app: cell.app,
+      dataType: cell.dataType || null,
+      tap: { x: tapX, y: D.PILL.y, w: tapW, h: D.PILL.h, src: hitName(tapW, D.PILL.h) },
+      value: {
+        x: D.cellCenter(i) - Math.round(vw / 2),
+        y: Math.round(D.PILL.y + D.PILL.h - D.TILE.valueDy - size * 0.65),
+        w: vw,
+        h: Math.round(size * 1.3),
+        size,
+      },
+    }
+  })
 
   const body = `/**
  * GENERATED by tools/build-assets.cjs — do not edit by hand.
@@ -706,7 +847,13 @@ function main() {
 
   const hitSizes = new Set()
   D.SLOTS.forEach((s) => hitSizes.add(s.box.w + 'x' + s.box.h))
-  hitSizes.add(Math.round(D.cellW) + 'x' + D.PILL.h)
+  // The pill's cells are flex-sized, so ask for each one rather than assuming a
+  // single size covers them.
+  for (let i = 0; i < D.PILL.cells.length; i += 1) {
+    const x = i === 0 ? 0 : D.cellEdge(i)
+    const w = (i === D.PILL.cells.length - 1 ? D.W : D.cellEdge(i + 1)) - x
+    hitSizes.add(w + 'x' + D.PILL.h)
+  }
   hitSizes.forEach((size) => {
     const [w, h] = size.split('x').map(Number)
     render(hitSprite(w, h), hitName(w, h))

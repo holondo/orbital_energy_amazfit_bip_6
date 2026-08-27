@@ -436,6 +436,32 @@ for (const m of markers) {
 // In edit mode WATCHFACE_EDIT_BG shows `preview`, a full render of the whole
 // face in the candidate theme. Any other widget left visible there paints over
 // it in the *current* theme's colours, so the carousel shows two faces at once.
+// Readings have to be on the glass, not merely inside the framebuffer. The
+// screen is a rounded rect, and a value crossing its corner arc is simply
+// absent on the watch — which is how the first L-shape build shipped a clipped
+// heart rate. Card artwork is exempt: its own corner is arced to match.
+for (const w of created) {
+  const src = w.props.src || ''
+  const isContent =
+    w.type === widget.TEXT ||
+    w.type === widget.TEXT_IMG ||
+    (w.type === widget.IMG && src.indexOf('meter') !== -1)
+  if (!isContent) continue
+  const p = w.props
+  const pts = [
+    [p.x, p.y],
+    [p.x + p.w, p.y],
+    [p.x, p.y + p.h],
+    [p.x + p.w, p.y + p.h],
+  ]
+  if (pts.some(([cx, cy]) => !D.insideScreen(cx, cy))) {
+    problems.push(
+      `${w.type} at ${p.x},${p.y} ${p.w}x${p.h} crosses the screen corner arc ` +
+        `(SCREEN_R=${D.SCREEN_R}) — it would be clipped on the watch`
+    )
+  }
+}
+
 const LV_EDIT_MASK = 0x4
 for (const w of created) {
   // WATCHFACE_EDIT_BG owns edit mode. WIDGET_DELEGATE draws nothing — it is
