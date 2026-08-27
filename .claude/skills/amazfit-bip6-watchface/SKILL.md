@@ -343,6 +343,22 @@ rules avoid it:
 The general lesson: a widget that reports success is not a widget that
 rendered. Assert on pixels, not on the absence of exceptions.
 
+**Give `LV_EDIT` to the edit widget and to nothing else.** `preview` is a full
+render of the entire face, so in edit mode the editor is already drawing
+everything. Any widget of yours still visible there paints on top of it in the
+*current* theme's colours, and the carousel shows two faces at once — doubled
+numbers, the old theme's markers over the new theme's. It clears the moment a
+theme is committed and the face reloads, which makes it look like a repaint
+glitch rather than a `show_level` mistake.
+
+So: `show_level: LV_NORMAL` on every visual widget, `LV_NORMAL | LV_EDIT` only
+on `WATCHFACE_EDIT_BG`. Leaving `show_level` off entirely is the same bug — the
+default is visible at every level. The one exception is `WIDGET_DELEGATE`,
+which draws nothing and whose `resume_call` you do not want to narrow.
+
+Render edit mode in your harness, not just normal mode. The bug is invisible in
+a normal-mode render because both layers agree there.
+
 - `path` — the background drawn in normal mode for that theme.
 - `preview` — what the carousel shows while cycling. The stock faces make this
   a **full-screen render of the entire face** in that theme (400x450 in the

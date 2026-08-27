@@ -26,6 +26,7 @@ const MINUTE = Number(argv[1] !== undefined && !argv[1].startsWith('--') ? argv[
 
 const LV_NORMAL = 0x1
 const LV_AOD = 0x2
+const LV_EDIT = 0x4
 
 // ------------------------------------------------------------ zos stubs ----
 
@@ -339,7 +340,13 @@ function renderScene(level) {
     const show = p.show_level == null ? 0xff : p.show_level
     if (!(show & level)) continue
 
-    if (w.type === widget.IMG) {
+    if (w.type === widget.WATCHFACE_EDIT_BG) {
+      // What the editor itself paints: the candidate theme's full-face
+      // `preview` while cycling, its `path` once committed.
+      const cfg = w.props.bg_config.filter((c) => c.id === THEME_ID)[0] || w.props.bg_config[0]
+      const src = level & LV_EDIT ? cfg.preview : cfg.path
+      body += `<image href="${dataUri(src)}" x="0" y="0" width="${D.W}" height="${D.H}"/>`
+    } else if (w.type === widget.IMG) {
       body += `<image href="${dataUri(p.src)}" x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}"/>`
     } else if (w.type === widget.FILL_RECT) {
       body +=
@@ -426,6 +433,23 @@ for (const m of markers) {
   if (m.props.w > D.MAX_SPRITE) problems.push(`marker sprite ${m.props.w}px exceeds MAX_SPRITE`)
 }
 
+// In edit mode WATCHFACE_EDIT_BG shows `preview`, a full render of the whole
+// face in the candidate theme. Any other widget left visible there paints over
+// it in the *current* theme's colours, so the carousel shows two faces at once.
+const LV_EDIT_MASK = 0x4
+for (const w of created) {
+  // WATCHFACE_EDIT_BG owns edit mode. WIDGET_DELEGATE draws nothing — it is
+  // the resume_call/pause_call hook, and narrowing its show_level would risk
+  // the lifecycle callbacks that keep the minute marker moving.
+  if (w.type === widget.WATCHFACE_EDIT_BG || w.type === widget.WIDGET_DELEGATE) continue
+  const show = w.props.show_level
+  if (show == null) {
+    problems.push(`${w.type} has no show_level — it defaults to visible in edit mode`)
+  } else if (show & LV_EDIT_MASK) {
+    problems.push(`${w.type} at ${w.props.x},${w.props.y} is visible in edit mode`)
+  }
+}
+
 const live = timers.filter(Boolean)
 if (live.length !== 1) problemsLater.push(`expected exactly 1 poll timer, found ${live.length}`)
 else console.log(`poll timer: every ${live[0].period / 1000}s while awake`)
@@ -456,6 +480,7 @@ if (problems.length) {
 }
 
 console.log('\n' + write(LV_NORMAL, `t${THEME_ID}-${D.pad2(HOUR)}${D.pad2(MINUTE)}.png`))
+console.log(write(LV_EDIT, `edit-t${THEME_ID}.png`))
 if (AOD_MODE) console.log(write(LV_AOD, `aod-${D.pad2(HOUR)}${D.pad2(MINUTE)}.png`))
 
 face.onDestroy()

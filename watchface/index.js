@@ -70,6 +70,10 @@ import {
 // appear only in the matching state.
 const LV_NORMAL = 0x1
 const LV_AOD = 0x2
+// Only the WATCHFACE_EDIT_BG widget carries LV_EDIT. Its `preview` is a full
+// render of the whole face in the candidate theme, so any widget of ours left
+// visible in edit mode paints over it in the *current* theme's colours — the
+// carousel then shows two faces at once until a theme is committed.
 const LV_EDIT = 0x4
 
 const CAN_DELETE = typeof deleteWidget === 'function'
@@ -298,7 +302,7 @@ WatchFace({
         // ELLIPSIS keeps it still and only trims if it ever really overruns.
         text_style: text_style.ELLIPSIS,
         text: '',
-        show_level: LV_NORMAL | LV_EDIT,
+        show_level: LV_NORMAL,
       },
       options
     ))
@@ -315,7 +319,7 @@ WatchFace({
           w: slot.meter.w,
           h: slot.meter.h,
           src: IMAGE.meter(this.theme.key, slot.meter.name, 0),
-          show_level: LV_NORMAL | LV_EDIT,
+          show_level: LV_NORMAL,
         })
       }
 
@@ -380,7 +384,7 @@ WatchFace({
         h_space: 0,
         align_h: align.CENTER_H,
         align_v: align.CENTER_V,
-        show_level: LV_NORMAL | LV_EDIT,
+        show_level: LV_NORMAL,
       })
     } catch (e) {
       console.log('temperature widget unavailable: ' + e)
@@ -548,7 +552,7 @@ WatchFace({
         HOUR_POS[hour],
         IMAGE.hourHighlight(this.theme.key, hour),
         HL_HOUR_BOX,
-        LV_NORMAL | LV_EDIT
+        LV_NORMAL
       )
       this.placeMarker('aodHourChip', AOD_HOUR_POS[hour], IMAGE.aodHourRing, HL_HOUR_BOX, LV_AOD)
     }
@@ -560,7 +564,7 @@ WatchFace({
         MINUTE_POS[minute],
         IMAGE.minuteHighlight(this.theme.key, minute),
         HL_MIN_BOX,
-        LV_NORMAL | LV_EDIT
+        LV_NORMAL
       )
       this.placeMarker('aodMinuteChip', AOD_MINUTE_POS[minute], IMAGE.aodMinuteRing, HL_MIN_BOX, LV_AOD)
     }
