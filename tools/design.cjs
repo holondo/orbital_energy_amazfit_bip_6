@@ -605,7 +605,18 @@ const PILL_INSET = Math.ceil(
     )
 )
 
-const cellFlex = PILL.cells.map((c) => c.w + PILL.cellPad)
+/**
+ * Equal cells whenever the readings allow it, flex only when they do not.
+ *
+ * Sizing every cell to its own content is what keeps a wide reading from being
+ * clipped, but it also moves the cell centres off the symmetric positions —
+ * with three cells the middle one landed at 183 instead of 195, and the row
+ * read as if it had slipped left. Equal cells put it back on the centre line,
+ * so they are the default and content-sizing is the fallback.
+ */
+const cellEqualW = (PILL.w - 2 * PILL_INSET) / PILL.cells.length
+const cellsFitEqual = PILL.cells.every((c) => c.w + PILL.cellPad <= cellEqualW)
+const cellFlex = PILL.cells.map((c) => (cellsFitEqual ? 1 : c.w + PILL.cellPad))
 const flexTotal = cellFlex.reduce((a, b) => a + b, 0)
 const cellSpan = PILL.w - 2 * PILL_INSET
 // Cumulative edges, rounded once and shared, so the cells tile the span exactly.
