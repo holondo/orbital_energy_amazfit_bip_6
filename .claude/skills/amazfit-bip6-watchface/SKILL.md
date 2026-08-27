@@ -768,6 +768,38 @@ Content still needs the radius, for three things: how far down a corner card's
 first row has to start, how far in a bottom bar's readings have to sit, and the
 assertion that catches the ones that do not.
 
+### The cover is a second implementation of your layout
+
+`preview_tN.png` is what the watchface list and the theme carousel show, and it
+is drawn by the generator, not by the widgets. That makes it a parallel
+implementation of the same layout — and it will drift, silently, because no
+render of the face itself can reveal it. Here it kept its own copy of the value
+placement, missed the switch to right-aligned column readings, and shipped a
+cover with every number hanging outside its card.
+
+Two rules keep it honest:
+
+1. **Compute the widget boxes once.** Emit them into `layout.js` for the runtime
+   *and* draw the preview from the same array. Recomputing is the drift.
+2. **Draw each reading the way its widget draws it.** A `TEXT_IMG` lays one
+   fixed-width glyph image per character; kerned text lands about 5px off from
+   it. Same box is not enough — same method.
+
+`tools/check-preview.cjs` diffs each cover against a harness render at the
+preview's own sample time, per reading, inside the box the runtime gives that
+widget.
+
+**Do not measure this by counting differing pixels.** That was the first
+attempt and it fails: misplaced readings changed 2.7% of the image against a
+1.3% baseline, and even per-box it was 11-13% against a 3-6% noise floor from
+antialiasing. Compare the **ink centroid and ink mass** in each box instead —
+"did this move" is the actual question, and the answer separates cleanly:
+0px shift when correct, 55-84% of the ink simply gone when not.
+
+Verify the check fires. Reintroduce the bug, confirm it fails, restore. An
+assertion that has never failed is not known to work — the pixel-counting
+version passed happily on a build that was visibly broken.
+
 ### Check against the mask, not against your model
 
 A fitted radius is a model of the glass. The screenshot's alpha channel *is*

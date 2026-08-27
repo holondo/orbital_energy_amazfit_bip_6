@@ -507,28 +507,109 @@ function aodSvg() {
 // -------------------------------------------------------------- preview ----
 
 /** Full-resolution mock of the running watchface, for app.json's preview. */
+/**
+ * Where each reading's widget box lands.
+ *
+ * Emitted into layout.js for the runtime *and* used by previewSvg, so the
+ * preview cannot drift from the face. It did: the preview kept its own copy of
+ * this arithmetic, missed the switch to right-aligned column readings, and
+ * shipped a cover image with every value hanging outside its card.
+ */
+function layoutSlots() {
+  return D.SLOTS.map((slot) => ({
+    key: slot.key,
+    app: slot.app,
+    tap: Object.assign({ src: hitName(slot.box.w, slot.box.h) }, slot.box),
+    value: {
+      align: slot.align || 'left',
+      x: slot.box.x + (slot.align === 'right'
+        ? D.TILE.pad
+        : slot.value.dx === undefined
+          ? D.TILE.pad
+          : slot.value.dx),
+      y: Math.round(D.tileValueY(slot.box)) - 18,
+      w: slot.align === 'right' ? slot.box.w - 2 * D.TILE.pad : slot.value.w,
+      h: 36,
+      size: slot.value.size,
+      color: slot.value.color, // role name — the runtime resolves it per theme
+    },
+    unit: slot.unit
+      ? {
+          x: slot.box.x + slot.unit.dx,
+          y: Math.round(D.tileValueY(slot.box)) - 6,
+          w: slot.unit.w,
+          h: 24,
+          size: slot.unit.size,
+          color: slot.unit.color,
+          text: slot.unit.text || '',
+        }
+      : null,
+    meter: slot.meter
+      ? {
+          name: slot.meter.name,
+          x: slot.box.x + slot.meter.dx,
+          y: slot.box.y + slot.meter.dy,
+          w: slot.meter.w,
+          h: slot.meter.h,
+        }
+      : null,
+    dataType: slot.dataType || null,
+  }))
+}
+
+/**
+ * Draws a string exactly where the runtime would draw that widget: same box,
+ * same alignment, same size. Takes the emitted box rather than the slot, so it
+ * is the one description of "where this reading goes".
+ */
+/**
+ * The temperature the way the runtime draws it: a TEXT_IMG laying one fixed
+ * width glyph image per character, not a text run. Kerned text lands about 5px
+ * off from it, which is enough to make the cover disagree with the face.
+ */
+function glyphsInBox(box, str, color) {
+  const chars = String(str).split('')
+  const total = chars.length * TEMP_GLYPH.w
+  const x0 = box.align === 'right' ? box.x + box.w - total : box.x
+  const cy = box.y + box.h / 2
+  return chars
+    .map((ch, i) =>
+      text(x0 + i * TEMP_GLYPH.w + TEMP_GLYPH.w / 2, cy, ch, {
+        size: TEMP_SIZE,
+        color,
+        weight: 600,
+        anchor: 'middle',
+      })
+    )
+    .join('')
+}
+
+function textInBox(box, str, color, weight) {
+  const right = box.align === 'right'
+  return text(right ? box.x + box.w : box.x, box.y + box.h / 2, str, {
+    size: box.size,
+    color,
+    weight: weight || 600,
+    anchor: right ? 'end' : 'start',
+  })
+}
+
 function previewSvg(sample) {
   const { cx, cy, hlHourCentre, hlMinCentre } = D.DIAL
   let defs = ''
   let out = backgroundSvg().replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '')
 
-  for (const slot of D.SLOTS) {
-    const box = slot.box
+  for (const slot of layoutSlots()) {
     const value = sample[slot.key]
+    if (value === undefined) throw new Error(`preview has no sample for "${slot.key}"`)
 
-    const valueRight = slot.align === 'right'
-    out += text(valueRight
-      ? box.x + box.w - D.TILE.pad
-      : box.x + (slot.value.dx === undefined ? D.TILE.pad : slot.value.dx), D.tileValueY(box), value, {
-      anchor: valueRight ? 'end' : 'start',
-      size: slot.value.size,
-      color: T.C[slot.value.color],
-      weight: 700,
-      anchor: 'start',
-    })
+    out +=
+      slot.key === 'temp'
+        ? glyphsInBox(slot.value, value, T.C[slot.value.color])
+        : textInBox(slot.value, value, T.C[slot.value.color])
 
     if (slot.unit) {
-      out += text(box.x + slot.unit.dx, D.tileValueY(box) + 6, slot.unit.text || sample[slot.key + 'Unit'], {
+      out += text(slot.unit.x, slot.unit.y + slot.unit.h / 2, slot.unit.text, {
         size: slot.unit.size,
         color: T.C[slot.unit.color],
         weight: 600,
@@ -544,15 +625,16 @@ function previewSvg(sample) {
           : Number(value) / 100
       const parts = meterParts(m.name, pct, 'plit')
       defs += parts.defs
-      out += `<g transform="translate(${box.x + m.dx} ${box.y + m.dy})">${parts.body}</g>`
+      out += `<g transform="translate(${m.x} ${m.y})">${parts.body}</g>`
     }
   }
 
   D.PILL.cells.forEach((cell, i) => {
+    if (sample[cell.key] === undefined) throw new Error(`preview has no sample for "${cell.key}"`)
     out += text(D.cellCenter(i), D.PILL.y + D.PILL.h - D.TILE.valueDy, sample[cell.key], {
       size: cell.size || D.PILL.valueSize,
       color: T.C.primary,
-      weight: 700,
+      weight: 600,
     })
   })
 
@@ -606,45 +688,7 @@ function jsonWithColors(value) {
 function emitLayout() {
   const { cx, cy, hlHourCentre, hlMinCentre, hlHourBox, hlMinBox } = D.DIAL
 
-  const slots = D.SLOTS.map((slot) => ({
-    key: slot.key,
-    app: slot.app,
-    tap: Object.assign({ src: hitName(slot.box.w, slot.box.h) }, slot.box),
-    value: {
-      align: slot.align || 'left',
-      x: slot.box.x + (slot.align === 'right'
-        ? D.TILE.pad
-        : slot.value.dx === undefined
-          ? D.TILE.pad
-          : slot.value.dx),
-      y: Math.round(D.tileValueY(slot.box)) - 18,
-      w: slot.align === 'right' ? slot.box.w - 2 * D.TILE.pad : slot.value.w,
-      h: 36,
-      size: slot.value.size,
-      color: slot.value.color, // role name — the runtime resolves it per theme
-    },
-    unit: slot.unit
-      ? {
-          x: slot.box.x + slot.unit.dx,
-          y: Math.round(D.tileValueY(slot.box)) - 6,
-          w: slot.unit.w,
-          h: 24,
-          size: slot.unit.size,
-          color: slot.unit.color,
-          text: slot.unit.text || '',
-        }
-      : null,
-    meter: slot.meter
-      ? {
-          name: slot.meter.name,
-          x: slot.box.x + slot.meter.dx,
-          y: slot.box.y + slot.meter.dy,
-          w: slot.meter.w,
-          h: slot.meter.h,
-        }
-      : null,
-    dataType: slot.dataType || null,
-  }))
+  const slots = layoutSlots()
 
   // Cell edges are rounded once and shared, so the cells tile the bar exactly
   // instead of each rounding its own width and overrunning the last edge.
