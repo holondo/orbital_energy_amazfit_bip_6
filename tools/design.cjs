@@ -265,8 +265,16 @@ const THEMES = [
     id: 6,
     key: 't6',
     name: 'Urucum',
-    ring: { hue: 25, spread: 16, sat: 45, light: 82, lightQuarter: 92, zero: '#fff2e0' },
-    minRing: { sat: 34, light: 74, zero: '#e8ccae' },
+    // The ring numbers stay inside the red rather than going cream. They are
+    // reference marks, not readings, and a pale ring competed with the two
+    // markers that actually matter. The sweep runs deep wine at the bottom of
+    // the dial to ember at the top; the quarters keep enough lightness to still
+    // read as landmarks.
+    // A narrow sweep on purpose: widening it pushed the 18 end into orange, and
+    // at the lightness the quarter marks need that came out tan — cream by
+    // another route. Kept between deep wine and ember instead.
+    ring: { hue: 10, spread: 8, sat: 72, light: 44, lightQuarter: 56, zero: '#ff6a2e' },
+    minRing: { sat: 62, light: 42, zero: '#e0552a' },
     C: {
       bg: '#000000',
       primary: '#ee3c10',
