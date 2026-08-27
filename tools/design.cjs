@@ -21,11 +21,15 @@ const H = 450
  * rectangle, so its own resources do not encode it either. It is therefore a
  * measured-by-eye tunable.
  *
- * Err large rather than small. Over-rounding leaves a hairline of background
- * between the card and the screen edge, which is invisible on an AMOLED that
- * is already black there. Under-rounding clips the corner off the card.
+ * Measured, finally, off a device screenshot with an alpha channel:
+ * reference/screenshot-135404033.png carries the panel's own mask, and a
+ * circle of radius 84 fits its corner to an RMS of 0.16px. A superellipse fits
+ * worse (n=1.90), so it really is a circular arc.
+ *
+ * This was guessed at 56 for a while, and everything that clipped on the watch
+ * clipped because of those 28px.
  */
-const SCREEN_R = 56
+const SCREEN_R = 84
 
 /**
  * The one knob. Everything else on the face is derived from it.
@@ -347,42 +351,28 @@ const COL_ICON_SIZE = 14
 /**
  * Corner radii for a box, clockwise from top-left.
  *
- * A corner sitting in a screen corner takes the display's radius so the card
- * follows the glass; every other corner takes the normal tile radius. Derived
- * from the box's own position rather than hand-listed, so moving a card cannot
- * leave a stale radius behind.
+ * Every corner is the ordinary tile radius — including the ones that sit in a
+ * screen corner. Matching the glass's own 84px arc there is the wrong instinct
+ * twice over: a 64px-tall bar cannot carry an 84px radius at all (the path
+ * doubles back on itself), and even where it fits, any error leaves a visible
+ * black gap between card and glass.
+ *
+ * Letting the card overrun instead is self-correcting. The panel clips
+ * whatever crosses its edge, so a squarer card comes out following the arc
+ * exactly, for free. Artwork may overflow; only readings may not — that is
+ * what insideScreen() guards.
  */
 function corners(box, innerR) {
   const r = innerR === undefined ? TILE.r : innerR
-  const left = box.x <= 0
-  const right = box.x + box.w >= W
-  const top = box.y <= 0
-  const bottom = box.y + box.h >= H
-  return [
-    left && top ? SCREEN_R : r,
-    right && top ? SCREEN_R : r,
-    right && bottom ? SCREEN_R : r,
-    left && bottom ? SCREEN_R : r,
-  ]
+  return [r, r, r, r]
 }
 
 /**
- * Smallest x at which a row sitting `TILE.labelDy` from the top of a card in a
- * screen corner is fully inside that card. Solved from the corner arc rather
- * than eyeballed, so changing SCREEN_R moves the content with it.
- */
-const ARC_SAFE_X = Math.ceil(
-  SCREEN_R -
-    Math.sqrt(
-      Math.max(0, SCREEN_R * SCREEN_R - Math.pow(SCREEN_R - TILE.labelDy + TILE.iconSize / 2, 2))
-    )
-)
-
-/**
- * Is this point on the glass? The screen is a rounded rect, so a point can be
- * inside the 390x450 framebuffer and still be under the bezel.
+ * Is this point on the glass? The panel is a rounded rect of radius SCREEN_R,
+ * so a point can be inside the 390x450 framebuffer and still be under the
+ * bezel.
  *
- * Card artwork may legitimately sit outside — its own corner is arced to match.
+ * Card artwork may sit outside — the glass clips it, which is the point.
  * Readings may not: a value that leaves this region is simply missing on the
  * watch, and reads as a font bug rather than a layout one.
  */
@@ -421,6 +411,18 @@ const tileValueY = (box) => box.y + box.h - TILE.valueDy
  */
 const BATTERY_H = 50 // one row: bolt, reading, wave — no label line above them
 const PILL_H = H - BAR_TOP - BATTERY_H - GAP
+
+/**
+ * The date shares the battery's row rather than the pill.
+ *
+ * At a corner radius of 84 the glass has curved a long way in by the time it
+ * reaches the pill's value line, which leaves far less width there than the
+ * flat middle of the screen suggests. "TUE 30" is the widest reading on the
+ * face, and asking the pill to hold it squeezed the other three. Up here, at
+ * y=328, the corners have barely started and the width is real.
+ */
+const DATE_W = 118
+const BATTERY_W = W - DATE_W - GAP
 
 /**
  * Every metric cell on the face: where it sits, how it is drawn, and which
@@ -488,14 +490,30 @@ const SLOTS = [
     // One row. The label line came off and the bolt moved beside the reading,
     // which is 23px of height that went straight into the dial's radius.
     key: 'battery',
-    box: { x: 0, y: BAR_TOP, w: W, h: BATTERY_H },
+    box: { x: 0, y: BAR_TOP, w: BATTERY_W, h: BATTERY_H },
     icon: 'bolt',
     iconColor: 'accent',
     inlineIcon: true,
-    meter: { name: 'battery', dx: 104, dy: Math.round((BATTERY_H - 22) / 2), w: 274, h: 22 },
+    meter: {
+      name: 'battery',
+      dx: 100,
+      dy: Math.round((BATTERY_H - 22) / 2),
+      w: BATTERY_W - 100 - TILE.pad,
+      h: 22,
+    },
     value: { size: 28, color: 'accent', w: 56, dx: 32 },
     dataType: 'BATTERY',
     app: 'SETTING',
+  },
+  {
+    key: 'date',
+    box: { x: BATTERY_W + GAP, y: BAR_TOP, w: DATE_W, h: BATTERY_H },
+    icon: 'calendar',
+    iconColor: 'iconDate',
+    inlineIcon: true,
+    align: 'right',
+    value: { size: 24, color: 'primary', w: 92 },
+    app: 'CALENDAR',
   },
 ]
 
@@ -566,7 +584,6 @@ const PILL = {
   // worst case it can show. Cell widths are derived from it, so a cell can
   // never end up narrower than the number it has to hold.
   cells: [
-    { key: 'date', label: 'Date', app: 'CALENDAR', w: 92 },
     { key: 'distance', label: 'Dist KM', dataType: 'DISTANCE', app: 'STATUS', w: 50 },
     { key: 'steps', label: 'Steps', dataType: 'STEP', app: 'STATUS', w: 70 },
     { key: 'kcal', label: 'Kcal', dataType: 'CAL', app: 'STATUS', w: 70 },

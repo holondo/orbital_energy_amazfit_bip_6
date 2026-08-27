@@ -725,19 +725,60 @@ identified the reading — and the bar started at `ARC_SAFE_X`. Check the corner
 at a zoom of 3x or more; at 1x an element hanging 5px outside its card reads as
 a rendering artefact rather than a layout bug.
 
-### You cannot look up the screen's corner radius
+### The screen's corner radius: 84px, and how to measure it
 
-Not from the device (`getDeviceInfo()` has no radius field), not from the
-runtime (`getAppWidgetSize()` returns one but hangs off the `hmUI` global this
-firmware lacks), and not from the simulator, which draws the screen as a plain
-rectangle and therefore never encodes it. Screenshots do not settle it either:
-chat and preview surfaces round image corners themselves, which reads exactly
+The Bip 6's panel is a rounded rect of radius **84**. A circle fits its corner
+to an RMS of 0.16px; a superellipse fits worse (n=1.90), so it really is a
+circular arc, not a squircle.
+
+You cannot look this up. `getDeviceInfo()` has no radius field.
+`getAppWidgetSize()` returns one but hangs off the `hmUI` global this firmware
+lacks. The simulator draws the screen as a plain rectangle and never encodes
+it. And you cannot eyeball it from a screenshot pasted into a chat, because
+chat and preview surfaces round image corners themselves — which looks exactly
 like a device mask.
 
-Make it one named constant and err large. Over-rounding leaves a hairline of
-background between card and glass, invisible on an AMOLED that is already black
-there; under-rounding clips the card. Confirm it against a photo of the real
-watch before calling the layout finished.
+**Measure it instead.** A screenshot taken on the watch and saved as a PNG
+carries the panel's own alpha channel: transparent outside the glass. Fit a
+circle to the alpha boundary:
+
+```js
+const leftAt = (y) => { for (let x = 0; x < w; x++) if (alpha(x, y) > 127) return x }
+// (R-x)^2 + (R-y)^2 = R^2 for every boundary point; sweep R for the best fit.
+```
+
+Guessing costs more than it looks. This face was built at 56 for several
+rounds; every reading that vanished on the watch vanished because of those
+28px, and each round produced a plausible-looking render that was wrong.
+
+### Let the glass do the clipping
+
+The instinct is to give a card in a screen corner the display's own radius so
+it follows the glass. That is wrong twice over. A 64px-tall bar cannot carry an
+84px radius at all — the path doubles back on itself and renders as garbage.
+And where it does fit, any error in the radius shows as a black gap between
+card and glass.
+
+Run the card past the edge with an ordinary radius instead. The panel clips
+whatever crosses it, so a squarer card comes out following the arc exactly, for
+free and without knowing the radius at all. **Artwork may overflow; readings
+may not.**
+
+Content still needs the radius, for three things: how far down a corner card's
+first row has to start, how far in a bottom bar's readings have to sit, and the
+assertion that catches the ones that do not.
+
+### Check against the mask, not against your model
+
+A fitted radius is a model of the glass. The screenshot's alpha channel *is*
+the glass. `tools/check-mask.cjs` composites a render against it and reports
+any lit pixel that lands behind the bezel — filtering by luminance, since card
+fills and strokes sit below 45 in every theme while the dimmest text is over
+130. It also writes a `-masked.png`, which is the single most useful artefact
+in this whole workflow: exactly what the watch will show, before flashing it.
+
+That check found a malformed pill immediately after the radius model said the
+layout was fine.
 
 ---
 
